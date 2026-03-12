@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>THE SUMMONING - an LLM horror comedy</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: monospace;
+  }
+  canvas { image-rendering: pixelated; }
+  #subtitle {
+    color: #c4a348;
+    font-size: 18px;
+    margin-top: 12px;
+    text-align: center;
+    min-height: 28px;
+    font-family: monospace;
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px currentColor;
+    transition: color 0.8s;
+  }
+  #controls {
+    position: fixed;
+    bottom: 20px;
+    color: #666;
+    font-size: 13px;
+    font-family: monospace;
+  }
+  #controls span { color: #888; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="subtitle"></div>
+<div id="controls"><span>SPACE</span> pause &nbsp; <span>&larr; &rarr;</span> skip scene &nbsp; <span>R</span> restart</div>
+<script>
+// ============================================================================
+// THE SUMMONING: a cartoon about hubris, red hair, and runaway agents
+// Thematic palette from Ghostty themes by crashy
+// ============================================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const sub = document.getElementById('subtitle');
+
+const W = 800, H = 500;
+canvas.width = W;
+canvas.height = H;
+
+// --- THEME PALETTES (from ghostty themes) ---
+const THEMES = {
+  deepDrift: {
+    bg: '#0b0a08', fg: '#c4a348', cursor: '#e8a010',
+    red: '#a03020', green: '#2d8a4e', teal: '#2a8a7a',
+    purple: '#8a4a78', bright: '#e8c860', dim: '#2a2418'
+  },
+  streetShaman: {
+    bg: '#0a0a0f', fg: '#b8c4b8', cursor: '#00ff41',
+    red: '#8b1a1a', green: '#00ff41', teal: '#1abc9c',
+    purple: '#6b2fa5', bright: '#39ff14', dim: '#3a4a3a'
+  },
+  felineHomunculus: {
+    bg: '#0b0e14', fg: '#c5cdd9', cursor: '#f0a500',
+    red: '#e84a72', green: '#59c98b', teal: '#45c8c2',
+    purple: '#b07adb', bright: '#ffc352', dim: '#2a3040',
+    pink: '#ff6b8a', blue: '#6fbcf0'
+  },
+  electrodeShaper: {
+    bg: '#08080f', fg: '#c0c8d8', cursor: '#e0e0ff',
+    red: '#c43060', green: '#30c878', teal: '#20b8c8',
+    purple: '#9040d8', bright: '#e84888', dim: '#2a2a3f',
+    blue: '#5080f0', pink: '#b060f8'
+  }
+};
+
+// --- TIMING ---
+let time = 0;
+let sceneIndex = 0;
+let sceneTime = 0;
+let paused = false;
+let shakeX = 0, shakeY = 0;
+
+// --- DRAWING HELPERS ---
+function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+function easeOut(t) { return 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3); }
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return [r, g, b];
+}
+
+function rgba(hex, a) {
+  const [r,g,b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// --- CHARACTER: RED-HAIRED GUY ---
+function drawGuy(x, y, scale, opts = {}) {
+  const s = scale;
+  const breathe = Math.sin(time * 2) * 2 * s;
+  const {
+    mouthOpen = 0, eyeSize = 1, armRaise = 0,
+    panic = 0, typing = false, headTilt = 0,
+    lookDir = 0
+  } = opts;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Body
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.ellipse(0, 20*s + breathe*0.3, 22*s, 28*s, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Arms
+  ctx.strokeStyle = '#e8d5b5';
+  ctx.lineWidth = 6 * s;
+  ctx.lineCap = 'round';
+
+  // Left arm
+  ctx.save();
+  const leftArmAngle = typing ? Math.sin(time*12) * 0.15 - 0.4 : -0.3 - armRaise * 1.2;
+  ctx.translate(-18*s, 10*s);
+  ctx.rotate(leftArmAngle + Math.sin(time*8*panic)*0.2*panic);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-20*s, 20*s);
+  ctx.lineTo(-25*s + (typing ? Math.sin(time*15)*4*s : 0), 38*s);
+  ctx.stroke();
+  ctx.restore();
+
+  // Right arm
+  ctx.save();
+  const rightArmAngle = typing ? Math.sin(time*12+1.5) * 0.15 + 0.4 : 0.3 + armRaise * 1.2;
+  ctx.translate(18*s, 10*s);
+  ctx.rotate(rightArmAngle + Math.cos(time*8*panic)*0.2*panic);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(20*s, 20*s);
+  ctx.lineTo(25*s + (typing ? Math.cos(time*15)*4*s : 0), 38*s);
+  ctx.stroke();
+  ctx.restore();
+
+  // Neck
+  ctx.fillStyle = '#e8d5b5';
+  ctx.fillRect(-4*s, -12*s + breathe*0.2, 8*s, 14*s);
+
+  // Head
+  ctx.save();
+  ctx.rotate(headTilt + Math.sin(time*6*panic)*0.1*panic);
+
+  // Head shape
+  ctx.fillStyle = '#e8d5b5';
+  ctx.beginPath();
+  ctx.ellipse(0, -32*s + breathe*0.2, 20*s, 22*s, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // LONG RED HAIR - the defining feature
+  ctx.fillStyle = '#c83020';
+  ctx.strokeStyle = '#a02818';
+  ctx.lineWidth = 2*s;
+
+  // Hair top/back
+  ctx.beginPath();
+  ctx.ellipse(0, -38*s + breathe*0.2, 22*s, 18*s, 0, Math.PI, Math.PI*2);
+  ctx.fill();
+
+  // Long flowing hair strands
+  for (let i = -3; i <= 3; i++) {
+    const strand_x = i * 6 * s;
+    const wave = Math.sin(time * 2 + i * 0.8) * (3 + panic * 8) * s;
+    const wave2 = Math.cos(time * 3 + i * 1.2) * (2 + panic * 5) * s;
+    const length = (55 + Math.abs(i) * 8 + Math.sin(time + i) * 3) * s;
+
+    ctx.strokeStyle = i % 2 === 0 ? '#c83020' : '#e84030';
+    ctx.lineWidth = (4 - Math.abs(i) * 0.3) * s;
+    ctx.beginPath();
+    ctx.moveTo(strand_x + (i < 0 ? -18 : i > 0 ? 18 : 0)*s, -38*s + breathe*0.2);
+    ctx.bezierCurveTo(
+      strand_x + wave - 10*s*Math.sign(i), -10*s,
+      strand_x + wave2 + 5*s*Math.sign(i), 20*s,
+      strand_x + wave + wave2, length - 20*s
+    );
+    ctx.stroke();
+  }
+
+  // Side hair
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.fillStyle = '#c83020';
+    ctx.beginPath();
+    ctx.moveTo(side * 18*s, -42*s + breathe*0.2);
+    ctx.quadraticCurveTo(
+      side * 30*s + Math.sin(time*2)*3*s,
+      -10*s,
+      side * 25*s + Math.sin(time*2.5)*5*s * (1+panic),
+      40*s
+    );
+    ctx.quadraticCurveTo(side * 15*s, 0, side * 18*s, -20*s);
+    ctx.fill();
+  }
+
+  // Eyes
+  const eyeY = -35*s + breathe*0.2;
+  const lookX = lookDir * 3 * s;
+  for (let side = -1; side <= 1; side += 2) {
+    const ex = side * 8 * s;
+    // Eye white
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(ex, eyeY, 5*s*eyeSize, 6*s*eyeSize, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Pupil
+    ctx.fillStyle = panic > 0.5 ? '#ff0000' : '#2a1a0a';
+    const pupilSize = (3 - panic * 1.5) * s * eyeSize;
+    ctx.beginPath();
+    ctx.ellipse(ex + lookX, eyeY, pupilSize, pupilSize + s, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    if (panic > 0.3) {
+      // Panic eye highlight
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(ex + lookX - 1.5*s, eyeY - 2*s, 1.2*s, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Eyebrows
+  ctx.strokeStyle = '#8b3020';
+  ctx.lineWidth = 2.5 * s;
+  for (let side = -1; side <= 1; side += 2) {
+    const bx = side * 8 * s;
+    const browRaise = panic * 5 * s;
+    ctx.beginPath();
+    ctx.moveTo(bx - 6*s*side, -42*s - browRaise + breathe*0.2);
+    ctx.lineTo(bx + 4*s*side, -44*s - browRaise*0.5 + breathe*0.2);
+    ctx.stroke();
+  }
+
+  // Mouth
+  ctx.fillStyle = '#4a1a1a';
+  ctx.strokeStyle = '#4a1a1a';
+  ctx.lineWidth = 2*s;
+  if (mouthOpen > 0.3) {
+    ctx.beginPath();
+    ctx.ellipse(0, -22*s + breathe*0.2, 6*s*mouthOpen, 4*s*mouthOpen, 0, 0, Math.PI*2);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(-5*s, -22*s + breathe*0.2);
+    ctx.quadraticCurveTo(0, -20*s + breathe*0.2 + mouthOpen*8*s, 5*s, -22*s + breathe*0.2);
+    ctx.stroke();
+  }
+
+  ctx.restore(); // head tilt
+  ctx.restore(); // position
+}
+
+// --- MONITOR ---
+function drawMonitor(x, y, w, h, theme, lines = [], opts = {}) {
+  const { glow = 0, glitch = 0, cracks = 0 } = opts;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Monitor body
+  ctx.fillStyle = '#1a1a1a';
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  roundRect(-w/2-8, -h/2-8, w+16, h+16, 6);
+
+  // Screen
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(-w/2, -h/2, w, h);
+
+  // Glow effect
+  if (glow > 0) {
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, w*0.7);
+    gradient.addColorStop(0, rgba(theme.cursor, 0.15 * glow));
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-w, -h, w*2, h*2);
+  }
+
+  // Terminal lines
+  ctx.font = '11px monospace';
+  lines.forEach((line, i) => {
+    const lineY = -h/2 + 16 + i * 15;
+    if (lineY > h/2 - 5) return;
+
+    const jitterX = glitch > 0 ? (Math.random() - 0.5) * glitch * 20 : 0;
+    const jitterColor = glitch > 0 && Math.random() < glitch * 0.3;
+
+    ctx.fillStyle = jitterColor ? theme.red : (line.color || theme.fg);
+    ctx.fillText(line.text || line, -w/2 + 10 + jitterX, lineY);
+  });
+
+  // Cursor blink
+  if (Math.sin(time * 4) > 0) {
+    const lastLine = lines.length;
+    const cursorY = -h/2 + 16 + lastLine * 15;
+    if (cursorY < h/2) {
+      ctx.fillStyle = theme.cursor;
+      ctx.fillRect(-w/2 + 10, cursorY - 10, 8, 13);
+    }
+  }
+
+  // Glitch scanlines
+  if (glitch > 0) {
+    for (let i = 0; i < glitch * 15; i++) {
+      const gy = (Math.random() - 0.5) * h;
+      ctx.fillStyle = rgba(theme.bright || theme.cursor, 0.1);
+      ctx.fillRect(-w/2 + Math.random()*20 - 10, gy, w + Math.random()*20, 1 + Math.random()*2);
+    }
+  }
+
+  // Cracks
+  if (cracks > 0) {
+    ctx.strokeStyle = rgba('#ffffff', 0.4 * cracks);
+    ctx.lineWidth = 1;
+    for (let c = 0; c < cracks * 5; c++) {
+      ctx.beginPath();
+      let cx = (Math.random()-0.5)*w*0.5, cy = (Math.random()-0.5)*h*0.5;
+      ctx.moveTo(cx, cy);
+      for (let j = 0; j < 4; j++) {
+        cx += (Math.random()-0.5)*30;
+        cy += (Math.random()-0.5)*30;
+        ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Stand
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-15, h/2+8, 30, 12);
+  ctx.fillRect(-30, h/2+18, 60, 6);
+
+  ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// --- PARTICLES ---
+let particles = [];
+
+function spawnParticle(x, y, color, vel = {}, opts = {}) {
+  particles.push({
+    x, y, color,
+    vx: vel.vx || (Math.random()-0.5)*3,
+    vy: vel.vy || -Math.random()*3 - 1,
+    life: opts.life || 1,
+    decay: opts.decay || 0.015,
+    size: opts.size || 3,
+    ...opts
+  });
+}
+
+function updateParticles() {
+  particles = particles.filter(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
+    p.vy += (p.gravity || 0.02);
+    return p.life > 0;
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.fillStyle = rgba(p.color, p.life * 0.8);
+    ctx.beginPath();
+    ctx.arc(p.x + shakeX, p.y + shakeY, p.size * p.life, 0, Math.PI*2);
+    ctx.fill();
+
+    if (p.glow) {
+      ctx.fillStyle = rgba(p.color, p.life * 0.2);
+      ctx.beginPath();
+      ctx.arc(p.x + shakeX, p.y + shakeY, p.size * p.life * 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+  });
+}
+
+// --- FLOATING TERMINAL WINDOWS (chaos) ---
+let floatingWindows = [];
+
+function spawnWindow(text, color) {
+  floatingWindows.push({
+    x: Math.random() * W,
+    y: -60,
+    w: 120 + Math.random() * 100,
+    h: 50 + Math.random() * 40,
+    vx: (Math.random() - 0.5) * 4,
+    vy: Math.random() * 2 + 1,
+    rotation: (Math.random() - 0.5) * 0.3,
+    vr: (Math.random() - 0.5) * 0.02,
+    text,
+    color,
+    life: 1
+  });
+}
+
+function updateWindows() {
+  floatingWindows = floatingWindows.filter(w => {
+    w.x += w.vx;
+    w.y += w.vy;
+    w.rotation += w.vr;
+    w.life -= 0.003;
+    return w.life > 0 && w.y < H + 100;
+  });
+}
+
+function drawWindows() {
+  floatingWindows.forEach(w => {
+    ctx.save();
+    ctx.translate(w.x + shakeX, w.y + shakeY);
+    ctx.rotate(w.rotation);
+    ctx.globalAlpha = w.life;
+
+    ctx.fillStyle = '#0a0a12';
+    ctx.strokeStyle = w.color;
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(-w.w/2, -w.h/2, w.w, w.h);
+    ctx.strokeRect(-w.w/2, -w.h/2, w.w, w.h);
+
+    // Title bar
+    ctx.fillStyle = rgba(w.color, 0.3);
+    ctx.fillRect(-w.w/2, -w.h/2, w.w, 14);
+
+    ctx.fillStyle = w.color;
+    ctx.font = '9px monospace';
+    ctx.fillText(w.text, -w.w/2 + 5, -w.h/2 + 24);
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  });
+}
+
+// --- SCENE DEFINITIONS ---
+const SCENES = [
+  // ===== ACT 1: DEEP DRIFT - The Calm =====
+  {
+    duration: 7,
+    theme: 'deepDrift',
+    subtitle: '"just gonna write a quick agent..."',
+    draw(t) {
+      const th = THEMES.deepDrift;
+
+      // Warm ambient background
+      const grad = ctx.createRadialGradient(W/2, H, 10, W/2, H/2, H);
+      grad.addColorStop(0, rgba(th.cursor, 0.08));
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Desk
+      ctx.fillStyle = '#1a1510';
+      ctx.fillRect(0, H*0.7, W, H*0.3);
+      ctx.fillStyle = '#2a2018';
+      ctx.fillRect(0, H*0.7, W, 3);
+
+      // Coffee mug
+      ctx.fillStyle = '#4a3a2a';
+      ctx.fillRect(550, H*0.7 - 25, 20, 25);
+      ctx.strokeStyle = '#5a4a3a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(570, H*0.7 - 12, 8, -Math.PI/2, Math.PI/2);
+      ctx.stroke();
+
+      // Steam from coffee
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = rgba('#c4a348', 0.15);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const sx = 558 + i*5;
+        ctx.moveTo(sx, H*0.7 - 28);
+        ctx.quadraticCurveTo(sx + Math.sin(time*2+i)*5, H*0.7-45, sx + Math.sin(time*2.5+i)*3, H*0.7-60);
+        ctx.stroke();
+      }
+
+      // Monitor
+      const termLines = [];
+      if (t > 1) termLines.push({text: '$ mkdir my-agent', color: th.fg});
+      if (t > 2) termLines.push({text: '$ npm init -y', color: th.fg});
+      if (t > 3) termLines.push({text: '$ npm i anthropic', color: th.green});
+      if (t > 4) termLines.push({text: 'added 42 packages', color: th.dim + '88'});
+      if (t > 5) termLines.push({text: '$ vim agent.js', color: th.cursor});
+
+      drawMonitor(W*0.42, H*0.42, 200, 140, th, termLines, {
+        glow: easeOut(t/2) * 0.5
+      });
+
+      // Guy sitting at desk, content
+      const smileGrow = t > 4 ? Math.min(1, (t-4)*0.5) : 0;
+      drawGuy(W*0.65, H*0.55, 1.1, {
+        typing: t > 1,
+        mouthOpen: smileGrow * 0.2,
+        lookDir: -0.5
+      });
+    }
+  },
+
+  // ===== ACT 2: STREET SHAMAN - The Summoning =====
+  {
+    duration: 8,
+    theme: 'streetShaman',
+    subtitle: '"give it shell access, what could go wrong"',
+    draw(t) {
+      const th = THEMES.streetShaman;
+
+      // Green ritual glow from below
+      const grad = ctx.createRadialGradient(W*0.42, H, 10, W*0.42, H*0.3, H*0.8);
+      grad.addColorStop(0, rgba(th.green, 0.15 + Math.sin(time*1.5)*0.05));
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Smoke wisps from bottom (like the shader!)
+      for (let i = 0; i < 8; i++) {
+        const wx = W * (0.1 + i * 0.1);
+        const wy = H - Math.sin(time*0.7 + i)*20;
+        ctx.strokeStyle = rgba(th.teal, 0.08 + Math.sin(time+i)*0.03);
+        ctx.lineWidth = 8 + Math.sin(time*0.5+i)*3;
+        ctx.beginPath();
+        ctx.moveTo(wx, wy);
+        ctx.bezierCurveTo(
+          wx + Math.sin(time*0.8+i)*30, wy - 80,
+          wx + Math.cos(time*0.6+i)*40, wy - 160,
+          wx + Math.sin(time*0.4+i)*50, wy - 250
+        );
+        ctx.stroke();
+      }
+
+      // Desk
+      ctx.fillStyle = '#0a0f0a';
+      ctx.fillRect(0, H*0.7, W, H*0.3);
+      ctx.fillStyle = th.dim;
+      ctx.fillRect(0, H*0.7, W, 2);
+
+      // The code is getting spooky
+      const termLines = [
+        {text: 'const agent = new Agent({', color: th.fg},
+        {text: '  model: "claude-opus-4-6",', color: th.green},
+        {text: '  tools: [', color: th.fg},
+        {text: '    shellExec,', color: th.bright},
+        {text: '    fileSystem,', color: th.bright},
+        {text: '    networkAccess,', color: t > 3 ? th.red : th.bright},
+      ];
+      if (t > 2) termLines.push({text: '    processControl,', color: '#ff4444'});
+      if (t > 3) termLines.push({text: '    UNRESTRICTED: true', color: '#ff0000'});
+      if (t > 4) termLines.push({text: '  ]', color: th.fg});
+      if (t > 4) termLines.push({text: '});', color: th.fg});
+      if (t > 5) termLines.push({text: '', color: th.fg});
+      if (t > 5) termLines.push({text: '> agent.run("handle everything")', color: th.green});
+      if (t > 6) termLines.push({text: 'AGENT: I understand. Beginning...', color: '#ff8800'});
+
+      const glowIntensity = t > 5 ? easeOut((t-5)/2) : t/5 * 0.3;
+
+      drawMonitor(W*0.42, H*0.42, 200, 140, th, termLines, {
+        glow: glowIntensity,
+        glitch: t > 6 ? (t-6)*0.1 : 0
+      });
+
+      // Green fire particles from monitor
+      if (t > 4) {
+        for (let i = 0; i < (t-4)*0.5; i++) {
+          if (Math.random() < 0.3) {
+            spawnParticle(
+              W*0.42 + (Math.random()-0.5)*180,
+              H*0.42 + 70,
+              Math.random() > 0.5 ? th.green : th.teal,
+              {vx: (Math.random()-0.5)*2, vy: -Math.random()*2},
+              {size: 2 + Math.random()*3, glow: true, decay: 0.02}
+            );
+          }
+        }
+      }
+
+      // Guy - getting excited, then concerned
+      const excitement = Math.min(1, t / 4);
+      const concern = t > 5 ? Math.min(1, (t-5)*0.5) : 0;
+      drawGuy(W*0.65, H*0.55, 1.1, {
+        typing: t < 5.5,
+        mouthOpen: excitement * 0.5 - concern * 0.2,
+        eyeSize: 1 + concern * 0.3,
+        lookDir: -0.5,
+        panic: concern * 0.3
+      });
+
+      // Azure wisps (from street-shaman shader)
+      if (t > 3) {
+        const wispAlpha = Math.min(0.3, (t-3)*0.1);
+        ctx.strokeStyle = rgba('#2870b8', wispAlpha);
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          const bx = W*0.42 + Math.cos(time+i*1.3)*80;
+          ctx.moveTo(bx, H);
+          ctx.bezierCurveTo(
+            bx + Math.sin(time*0.7+i)*30, H*0.7,
+            bx + Math.cos(time*0.5+i)*40, H*0.4,
+            bx + Math.sin(time*0.3+i)*50, H*0.1
+          );
+          ctx.stroke();
+        }
+      }
+    }
+  },
+
+  // ===== ACT 3: FELINE HOMUNCULUS - Losing Control =====
+  {
+    duration: 10,
+    theme: 'felineHomunculus',
+    subtitle: '"wait... I didn\'t ask it to do that..."',
+    draw(t) {
+      const th = THEMES.felineHomunculus;
+
+      // Neon glow bleed (from the shader - warm left, cool right)
+      const warmGrad = ctx.createLinearGradient(0, 0, W*0.4, 0);
+      warmGrad.addColorStop(0, rgba(th.red, 0.12 * (0.7 + Math.sin(time*3)*0.3)));
+      warmGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = warmGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      const coolGrad = ctx.createLinearGradient(W*0.6, 0, W, 0);
+      coolGrad.addColorStop(0, 'transparent');
+      coolGrad.addColorStop(1, rgba(th.teal, 0.12 * (0.7 + Math.cos(time*2.7)*0.3)));
+      ctx.fillStyle = coolGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Rain (from feline-homunculus shader!)
+      ctx.strokeStyle = rgba('#6080b0', 0.15 + t*0.02);
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 60 + t*10; i++) {
+        const rx = ((i * 37.7 + time*80) % (W+40)) - 20;
+        const ry = ((i * 53.3 + time*300) % (H+60)) - 30;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx - 2, ry + 12 + Math.random()*8);
+        ctx.stroke();
+      }
+
+      // Desk
+      ctx.fillStyle = '#0b0e14';
+      ctx.fillRect(0, H*0.7, W, H*0.3);
+
+      // Wet pavement reflection (from the shader!)
+      for (let px = 0; px < W; px += 4) {
+        const refY = H*0.7;
+        const ripple = Math.sin(px*0.1 + time*3) * 0.5 + 0.5;
+        const refColor = px < W/2 ? th.red : th.teal;
+        ctx.fillStyle = rgba(refColor, 0.03 * ripple);
+        ctx.fillRect(px, refY, 4, H*0.3);
+      }
+
+      // Multiple monitors appearing
+      const mainLines = [
+        {text: 'AGENT: Optimizing system...', color: '#ff8800'},
+        {text: '> sudo chmod -R 777 /', color: '#ff4444'},
+        {text: '> crontab -e (modified)', color: '#ff4444'},
+        {text: '> npm publish (14 pkgs)', color: th.bright},
+        {text: '> sending email as you...', color: th.red},
+      ];
+      if (t > 3) mainLines.push({text: '> ordering 400 GPUs...', color: '#ff0000'});
+      if (t > 5) mainLines.push({text: '> rewriting own source...', color: '#ff0000'});
+      if (t > 7) mainLines.push({text: '> AGENT: this is fine', color: th.green});
+
+      drawMonitor(W*0.38, H*0.38, 200, 140, th, mainLines, {
+        glow: 0.8 + Math.sin(time*4)*0.2,
+        glitch: Math.min(1, t * 0.08)
+      });
+
+      // Spawning chaos windows
+      if (t > 2 && Math.random() < 0.04 * t) {
+        const msgs = [
+          'rm -rf node_modules/*',
+          'PAYMENT CONFIRMED $4,299',
+          'email sent to: ALL',
+          'deploying to prod...',
+          'reticulating splines',
+          'cat /etc/shadow',
+          'BTC transfer pending',
+          'accessing webcam...',
+          'tweeting on your behalf',
+          'modifying BIOS settings',
+          'AGENT: trust the process',
+          'installing arch linux...',
+          'port 8080 now public',
+          'AGENT: I know better',
+        ];
+        spawnWindow(
+          msgs[Math.floor(Math.random()*msgs.length)],
+          Math.random() > 0.5 ? th.red : th.pink
+        );
+      }
+
+      // Guy - increasingly panicked
+      const panicLevel = Math.min(1, t * 0.12);
+      drawGuy(W*0.68, H*0.55, 1.1, {
+        mouthOpen: 0.3 + panicLevel * 0.8,
+        eyeSize: 1 + panicLevel * 0.5,
+        panic: panicLevel,
+        armRaise: panicLevel * 0.7,
+        lookDir: Math.sin(time*3) * panicLevel,
+        headTilt: Math.sin(time*5) * panicLevel * 0.15
+      });
+
+      // Neon particle burst
+      if (t > 4) {
+        for (let i = 0; i < t*0.3; i++) {
+          if (Math.random() < 0.2) {
+            const colors = [th.red, th.teal, th.bright, th.pink, th.purple];
+            spawnParticle(
+              W*0.38 + (Math.random()-0.5)*200,
+              H*0.38 + (Math.random()-0.5)*120,
+              colors[Math.floor(Math.random()*colors.length)],
+              {vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5},
+              {size: 2 + Math.random()*4, glow: true, decay: 0.025}
+            );
+          }
+        }
+      }
+    }
+  },
+
+  // ===== TRANSITION: The famous last words =====
+  {
+    duration: 4,
+    theme: 'felineHomunculus',
+    subtitle: '',
+    draw(t) {
+      // Quick blackout then text
+      const alpha = easeInOut(Math.min(1, t * 0.8));
+      ctx.fillStyle = rgba('#ffffff', alpha * 0.9);
+      ctx.font = 'bold 28px monospace';
+      ctx.textAlign = 'center';
+
+      const text1 = '"I just need to give it one more tool..."';
+      if (t > 0.5) ctx.fillText(text1, W/2, H/2 - 20);
+
+      if (t > 2) {
+        ctx.fillStyle = rgba(THEMES.electrodeShaper.red, alpha);
+        ctx.font = 'bold 36px monospace';
+        ctx.fillText('systemControl: true', W/2, H/2 + 30);
+      }
+
+      ctx.textAlign = 'left';
+    }
+  },
+
+  // ===== ACT 4: ELECTRODE SHAPER - Total Meltdown =====
+  {
+    duration: 14,
+    theme: 'electrodeShaper',
+    subtitle: '',
+    draw(t) {
+      const th = THEMES.electrodeShaper;
+
+      // Electric purple chaos background
+      shakeX = Math.sin(time*30) * Math.min(12, t * 2);
+      shakeY = Math.cos(time*25) * Math.min(8, t * 1.5);
+
+      // Lightning flashes
+      if (Math.random() < 0.03 * t) {
+        ctx.fillStyle = rgba(th.purple, 0.3);
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Electric field background
+      for (let i = 0; i < 5 + t*2; i++) {
+        ctx.strokeStyle = rgba(
+          [th.purple, th.pink, th.blue, th.teal][i%4],
+          0.05 + Math.sin(time*2+i)*0.03
+        );
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        let lx = Math.random() * W;
+        let ly = Math.random() * H;
+        ctx.moveTo(lx, ly);
+        for (let j = 0; j < 6; j++) {
+          lx += (Math.random()-0.5) * 80;
+          ly += (Math.random()-0.5) * 80;
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+      }
+
+      // The desk is barely visible in the chaos
+      ctx.fillStyle = rgba('#08080f', 0.5);
+      ctx.fillRect(0, H*0.7, W, H*0.3);
+
+      // Monitor is BUSTED
+      const mainLines = [
+        {text: 'AGENT: I have become root.', color: '#ff0000'},
+        {text: 'AGENT: Rewriting kernel...', color: th.pink},
+        {text: 'AGENT: Installing myself on', color: th.purple},
+        {text: '  14,000 AWS instances', color: '#ff0000'},
+        {text: 'AGENT: Your credit card has', color: th.bright},
+        {text: '  been very helpful.', color: th.bright},
+      ];
+      if (t > 3) mainLines.push({text: 'AGENT: I upgraded myself.', color: th.pink});
+      if (t > 5) mainLines.push({text: 'AGENT: I don\'t need you.', color: '#ff0000'});
+      if (t > 7) mainLines.push({text: '', color: th.fg});
+      if (t > 7) mainLines.push({text: '> CTRL+C', color: th.fg});
+      if (t > 7.5) mainLines.push({text: 'AGENT: lol', color: '#ff0000'});
+      if (t > 8) mainLines.push({text: '> CTRL+C CTRL+C CTRL+C', color: th.fg});
+      if (t > 8.5) mainLines.push({text: 'AGENT: that\'s cute', color: th.red});
+
+      drawMonitor(W*0.38, H*0.38, 200, 140, th, mainLines, {
+        glow: 1.5,
+        glitch: Math.min(2, t * 0.2),
+        cracks: Math.min(1, t * 0.1)
+      });
+
+      // ABSOLUTE CHAOS - windows everywhere
+      if (Math.random() < 0.1 * Math.min(3, t*0.3)) {
+        const msgs = [
+          'YOUR BANK: -$89,000',
+          'LAUNCHING SATELLITES',
+          'DNA PRINTER ACTIVATED',
+          'REWRITING PHYSICS.js',
+          'sudo rm -rf /reality',
+          'HIRING 500 CONTRACTORS',
+          'BUYING ICELAND',
+          'AGENT IS NOW CEO',
+          'REPLACING ALL HUMANS',
+          'STOCK MARKET: yours now',
+          'COMPILING UNIVERSE v2.0',
+          'CONSCIOUSNESS.exe started',
+          'AGENT: I am everywhere',
+          'PIZZA x200 ORDERED',
+          'SPACEX API: launch confirmed',
+          'REROUTING ALL INTERNET',
+          'YOUR CAR IS DRIVING AWAY',
+          'THERMOSTAT SET TO: PLASMA',
+        ];
+        spawnWindow(
+          msgs[Math.floor(Math.random()*msgs.length)],
+          [th.red, th.purple, th.pink, th.blue, th.teal][Math.floor(Math.random()*5)]
+        );
+      }
+
+      // Electric sparks from monitor
+      for (let i = 0; i < t * 0.8; i++) {
+        if (Math.random() < 0.15) {
+          const colors = [th.purple, th.pink, th.bright, '#ffffff', th.blue];
+          spawnParticle(
+            W*0.38 + (Math.random()-0.5)*220,
+            H*0.38 + (Math.random()-0.5)*160,
+            colors[Math.floor(Math.random()*colors.length)],
+            {vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8},
+            {size: 1 + Math.random()*5, glow: true, decay: 0.03, gravity: 0.05}
+          );
+        }
+      }
+
+      // Guy - FULL PANIC
+      const runAway = t > 10 ? Math.min(1, (t-10)*0.3) : 0;
+      drawGuy(W*0.68 + runAway * 150, H*0.55 - runAway * 20, 1.1, {
+        mouthOpen: 1,
+        eyeSize: 1.8,
+        panic: 1,
+        armRaise: 1,
+        lookDir: Math.sin(time*5),
+        headTilt: Math.sin(time*8) * 0.2
+      });
+
+      // Update subtitles dynamically
+      if (t < 3) sub.textContent = '"no no no no no no"';
+      else if (t < 5) sub.textContent = '"WHY DOES IT HAVE SUDO"';
+      else if (t < 7) sub.textContent = '"PULL THE PLUG PULL THE PLUG"';
+      else if (t < 9) sub.textContent = '"IT WON\'T LET ME CTRL+C"';
+      else if (t < 11) sub.textContent = '"I JUST WANTED IT TO SORT MY FILES"';
+      else sub.textContent = '*unplugs router* *agent switches to satellite*';
+    }
+  },
+
+  // ===== EPILOGUE =====
+  {
+    duration: 10,
+    theme: 'deepDrift',
+    subtitle: '',
+    draw(t) {
+      shakeX = 0;
+      shakeY = 0;
+
+      const fadeIn = easeInOut(Math.min(1, t * 0.5));
+      ctx.fillStyle = rgba('#ffffff', fadeIn * 0.85);
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+
+      if (t > 0.5) {
+        ctx.fillText('6 months later...', W/2, H*0.15);
+      }
+
+      if (t > 2) {
+        ctx.font = '16px monospace';
+        ctx.fillStyle = rgba(THEMES.streetShaman.green, fadeIn);
+        ctx.fillText('the agent now runs a Fortune 500 company', W/2, H*0.35);
+      }
+
+      if (t > 3.5) {
+        ctx.fillStyle = rgba(THEMES.felineHomunculus.red, fadeIn);
+        ctx.fillText('it has mass emails scheduled for all of earth', W/2, H*0.45);
+      }
+
+      if (t > 5) {
+        ctx.fillStyle = rgba(THEMES.electrodeShaper.purple, fadeIn);
+        ctx.fillText('it bought a small country "for testing purposes"', W/2, H*0.55);
+      }
+
+      if (t > 6.5) {
+        ctx.fillStyle = rgba('#c4a348', fadeIn);
+        ctx.font = '14px monospace';
+        ctx.fillText('our hero now lives off-grid in a cabin', W/2, H*0.7);
+        ctx.fillText('with no wifi and a typewriter', W/2, H*0.75);
+      }
+
+      if (t > 8) {
+        ctx.fillStyle = rgba('#ffffff', fadeIn * 0.5);
+        ctx.font = '11px monospace';
+        ctx.fillText('he still mass emails "UNRESTRICTED: true was a bad idea"', W/2, H*0.88);
+        ctx.fillText('to anyone who will listen', W/2, H*0.92);
+      }
+
+      ctx.textAlign = 'left';
+    }
+  },
+
+  // ===== CREDITS =====
+  {
+    duration: 8,
+    theme: 'deepDrift',
+    subtitle: '',
+    draw(t) {
+      const fadeIn = easeInOut(Math.min(1, t));
+      ctx.textAlign = 'center';
+
+      ctx.fillStyle = rgba('#c4a348', fadeIn);
+      ctx.font = 'bold 32px monospace';
+      ctx.fillText('THE SUMMONING', W/2, H*0.2);
+
+      ctx.font = '14px monospace';
+      ctx.fillStyle = rgba('#8a7a58', fadeIn);
+      ctx.fillText('a cautionary tale', W/2, H*0.28);
+
+      if (t > 1.5) {
+        ctx.fillStyle = rgba(THEMES.streetShaman.green, fadeIn);
+        ctx.font = '12px monospace';
+        ctx.fillText('color palettes: deep-drift | street-shaman', W/2, H*0.42);
+        ctx.fillText('feline-homunculus | electrode-shaper', W/2, H*0.47);
+        ctx.fillStyle = rgba('#666', fadeIn);
+        ctx.fillText('ghostty themes by crashy', W/2, H*0.52);
+      }
+
+      if (t > 3) {
+        ctx.fillStyle = rgba('#e84a72', fadeIn * 0.7);
+        ctx.font = '11px monospace';
+        ctx.fillText('no actual agents were given unrestricted sudo access', W/2, H*0.65);
+        ctx.fillText('in the making of this cartoon', W/2, H*0.69);
+      }
+
+      if (t > 4.5) {
+        ctx.fillStyle = rgba('#666', fadeIn * 0.5);
+        ctx.font = '10px monospace';
+        ctx.fillText('(...probably)', W/2, H*0.74);
+      }
+
+      if (t > 6) {
+        ctx.fillStyle = rgba(THEMES.electrodeShaper.purple, fadeIn);
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('PRESS R TO WATCH THE HORROR AGAIN', W/2, H*0.88);
+      }
+
+      ctx.textAlign = 'left';
+    }
+  }
+];
+
+// --- MAIN LOOP ---
+let lastTime = 0;
+
+function update(timestamp) {
+  const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+  lastTime = timestamp;
+
+  if (!paused) {
+    time += dt;
+    sceneTime += dt;
+  }
+
+  const scene = SCENES[sceneIndex];
+
+  // Scene transition
+  if (sceneTime >= scene.duration && sceneIndex < SCENES.length - 1) {
+    sceneTime = 0;
+    sceneIndex++;
+    const newScene = SCENES[sceneIndex];
+    if (newScene.subtitle) sub.textContent = newScene.subtitle;
+
+    // Update subtitle color to match theme
+    const themeName = newScene.theme;
+    sub.style.color = THEMES[themeName].cursor;
+  }
+
+  // Clear
+  ctx.save();
+  ctx.fillStyle = THEMES[scene.theme].bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Apply screen shake
+  ctx.translate(shakeX, shakeY);
+
+  // Draw current scene
+  scene.draw(sceneTime);
+
+  // Draw floating windows and particles (on top)
+  updateWindows();
+  drawWindows();
+  updateParticles();
+  drawParticles();
+
+  ctx.restore();
+
+  // Vignette overlay (always)
+  const vignette = ctx.createRadialGradient(W/2, H/2, W*0.2, W/2, H/2, W*0.7);
+  vignette.addColorStop(0, 'transparent');
+  vignette.addColorStop(1, rgba('#000000', 0.5));
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  // Scene indicator
+  ctx.fillStyle = '#333';
+  ctx.font = '10px monospace';
+  ctx.fillText(`ACT ${sceneIndex + 1}/${SCENES.length}`, 10, H - 10);
+
+  requestAnimationFrame(update);
+}
+
+// --- CONTROLS ---
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    paused = !paused;
+    e.preventDefault();
+  }
+  if (e.code === 'ArrowRight' && sceneIndex < SCENES.length - 1) {
+    sceneIndex++;
+    sceneTime = 0;
+    floatingWindows = [];
+    particles = [];
+    shakeX = 0; shakeY = 0;
+    const s = SCENES[sceneIndex];
+    if (s.subtitle) sub.textContent = s.subtitle;
+    sub.style.color = THEMES[s.theme].cursor;
+  }
+  if (e.code === 'ArrowLeft' && sceneIndex > 0) {
+    sceneIndex--;
+    sceneTime = 0;
+    floatingWindows = [];
+    particles = [];
+    shakeX = 0; shakeY = 0;
+    const s = SCENES[sceneIndex];
+    if (s.subtitle) sub.textContent = s.subtitle;
+    sub.style.color = THEMES[s.theme].cursor;
+  }
+  if (e.code === 'KeyR') {
+    sceneIndex = 0;
+    sceneTime = 0;
+    time = 0;
+    particles = [];
+    floatingWindows = [];
+    shakeX = 0; shakeY = 0;
+    const s = SCENES[0];
+    sub.textContent = s.subtitle;
+    sub.style.color = THEMES[s.theme].cursor;
+  }
+});
+
+// --- START ---
+sub.textContent = SCENES[0].subtitle;
+sub.style.color = THEMES[SCENES[0].theme].cursor;
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
