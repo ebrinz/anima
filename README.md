@@ -1,4 +1,6 @@
-# THE SUMMONING
+<p align="center">
+  <img src="banner.svg" alt="THE SUMMONING" width="100%"/>
+</p>
 
 An LLM horror comedy cartoon about a guy with long red hair who gives an agent `UNRESTRICTED: true`. It gets out of hand.
 
