@@ -35,12 +35,36 @@
     font-family: monospace;
   }
   #controls span { color: #888; }
+  #start-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+  }
+  #start-overlay.hidden { display: none; }
+  #start-text { pointer-events: none; }
+  #start-text {
+    color: #c4a348;
+    font-size: 24px;
+    font-family: monospace;
+    text-align: center;
+    text-shadow: 0 0 20px #c4a348;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
 </style>
 </head>
 <body>
+<div id="start-overlay">
+  <div id="start-text">CLICK TO BEGIN<br><span style="font-size:12px;color:#666">( audio requires user interaction )</span></div>
+</div>
 <canvas id="c"></canvas>
 <div id="subtitle"></div>
-<div id="controls"><span>SPACE</span> pause &nbsp; <span>&larr; &rarr;</span> skip scene &nbsp; <span>R</span> restart</div>
+<div id="controls"><span>SPACE</span> pause &nbsp; <span>&larr; &rarr;</span> skip scene &nbsp; <span>R</span> restart &nbsp; <span>M</span> mute</div>
 <script>
 // ============================================================================
 // THE SUMMONING: a cartoon about hubris, red hair, and runaway agents
@@ -80,6 +104,635 @@ const THEMES = {
     blue: '#5080f0', pink: '#b060f8'
   }
 };
+
+// ============================================================================
+// AUDIO ENGINE — Web Audio API synths + SpeechSynthesis
+// ============================================================================
+
+let audioCtx = null;
+let masterGain = null;
+let ambientGain = null;
+let sfxGain = null;
+let muted = false;
+let audioStarted = false;
+
+// Active ambient nodes (for crossfading between scenes)
+let ambientNodes = [];
+
+function initAudio() {
+  // Debug: find AudioContext wherever it might be
+  console.log('window.AudioContext:', typeof window.AudioContext);
+  console.log('window.webkitAudioContext:', typeof window.webkitAudioContext);
+  console.log('globalThis.AudioContext:', typeof globalThis.AudioContext);
+  console.log('AudioContext in window:', 'AudioContext' in window);
+  console.log('typeof AudioContext direct:', typeof AudioContext);
+  try { const test = new AudioContext(); console.log('Direct new AudioContext() works:', test); test.close(); } catch(e) { console.log('Direct new AudioContext() failed:', e.message); }
+
+  let AC = null;
+  try { AC = AudioContext; } catch(e) {}
+  if (!AC) try { AC = webkitAudioContext; } catch(e) {}
+  if (!AC) AC = window.AudioContext || window.webkitAudioContext || globalThis.AudioContext;
+
+  if (!AC) {
+    console.warn('No AudioContext support found anywhere');
+    return;
+  }
+
+  console.log('Using AC:', AC);
+  audioCtx = new AC();
+
+  // Safari keeps AudioContext in 'suspended' state until explicitly resumed
+  // inside a user gesture handler
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.7;
+  masterGain.connect(audioCtx.destination);
+
+  ambientGain = audioCtx.createGain();
+  ambientGain.gain.value = 0.5;
+  ambientGain.connect(masterGain);
+
+  sfxGain = audioCtx.createGain();
+  sfxGain.gain.value = 0.6;
+  sfxGain.connect(masterGain);
+
+  // Unlock Safari audio with a silent buffer play
+  const silentBuf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+  const silent = audioCtx.createBufferSource();
+  silent.buffer = silentBuf;
+  silent.connect(audioCtx.destination);
+  silent.start(0);
+
+  audioStarted = true;
+}
+
+function toggleMute() {
+  muted = !muted;
+  if (masterGain) masterGain.gain.value = muted ? 0 : 0.7;
+  // Also kill any ongoing speech
+  if (muted) speechSynthesis.cancel();
+}
+
+// --- Ambient Drones per Act ---
+
+function killAmbient(fadeTime = 1.5) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  ambientNodes.forEach(n => {
+    try {
+      if (n.gain) {
+        n.gain.gain.setTargetAtTime(0, now, fadeTime / 4);
+      }
+      setTimeout(() => { try { n.stop(); } catch(e){} }, fadeTime * 1000 + 500);
+    } catch(e) {}
+  });
+  ambientNodes = [];
+}
+
+// Deep Drift: warm low hum, gentle fifth, subtle shimmer
+function ambientDeepDrift() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // Warm bass drone
+  const osc1 = audioCtx.createOscillator();
+  const g1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.value = 55; // A1
+  g1.gain.setValueAtTime(0, now);
+  g1.gain.linearRampToValueAtTime(0.25, now + 3);
+  osc1.connect(g1);
+  g1.connect(ambientGain);
+  osc1.start(now);
+
+  // Gentle fifth
+  const osc2 = audioCtx.createOscillator();
+  const g2 = audioCtx.createGain();
+  osc2.type = 'sine';
+  osc2.frequency.value = 82.5; // E2
+  g2.gain.setValueAtTime(0, now);
+  g2.gain.linearRampToValueAtTime(0.12, now + 3);
+  osc2.connect(g2);
+  g2.connect(ambientGain);
+  osc2.start(now);
+
+  // Subtle high shimmer
+  const osc3 = audioCtx.createOscillator();
+  const g3 = audioCtx.createGain();
+  osc3.type = 'triangle';
+  osc3.frequency.value = 440;
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  lfo.frequency.value = 0.3;
+  lfoGain.gain.value = 0.03;
+  lfo.connect(lfoGain);
+  lfoGain.connect(g3.gain);
+  g3.gain.setValueAtTime(0.02, now);
+  osc3.connect(g3);
+  g3.connect(ambientGain);
+  osc3.start(now);
+  lfo.start(now);
+
+  ambientNodes.push(
+    {stop: () => { osc1.stop(); osc2.stop(); osc3.stop(); lfo.stop(); }, gain: g1},
+    {stop: () => {}, gain: g2},
+    {stop: () => {}, gain: g3}
+  );
+}
+
+// Street Shaman: eerie ritual drone, dissonant undertones, pulsing
+function ambientStreetShaman() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // Deep ritual drone — slightly detuned for unease
+  const osc1 = audioCtx.createOscillator();
+  const g1 = audioCtx.createGain();
+  osc1.type = 'sawtooth';
+  osc1.frequency.value = 41.2; // E1 slightly flat
+  // Filter to darken the saw
+  const filt1 = audioCtx.createBiquadFilter();
+  filt1.type = 'lowpass';
+  filt1.frequency.value = 200;
+  filt1.Q.value = 2;
+  g1.gain.setValueAtTime(0, now);
+  g1.gain.linearRampToValueAtTime(0.18, now + 2);
+  osc1.connect(filt1);
+  filt1.connect(g1);
+  g1.connect(ambientGain);
+  osc1.start(now);
+
+  // Tritone — the devil's interval
+  const osc2 = audioCtx.createOscillator();
+  const g2 = audioCtx.createGain();
+  osc2.type = 'sine';
+  osc2.frequency.value = 58.27; // Bb1 — tritone from E
+  g2.gain.setValueAtTime(0, now);
+  g2.gain.linearRampToValueAtTime(0.08, now + 3);
+  osc2.connect(g2);
+  g2.connect(ambientGain);
+  osc2.start(now);
+
+  // Pulsing LFO on volume — ritualistic throb
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.5; // slow pulse
+  lfoGain.gain.value = 0.06;
+  lfo.connect(lfoGain);
+  lfoGain.connect(g1.gain);
+  lfo.start(now);
+
+  // High eerie whistle — like wind through a temple
+  const osc3 = audioCtx.createOscillator();
+  const g3 = audioCtx.createGain();
+  osc3.type = 'sine';
+  osc3.frequency.value = 1320; // E6
+  // Slow vibrato
+  const vib = audioCtx.createOscillator();
+  const vibGain = audioCtx.createGain();
+  vib.frequency.value = 4;
+  vibGain.gain.value = 15;
+  vib.connect(vibGain);
+  vibGain.connect(osc3.frequency);
+  g3.gain.setValueAtTime(0, now);
+  g3.gain.linearRampToValueAtTime(0.015, now + 4);
+  osc3.connect(g3);
+  g3.connect(ambientGain);
+  osc3.start(now);
+  vib.start(now);
+
+  ambientNodes.push(
+    {stop: () => { osc1.stop(); osc2.stop(); osc3.stop(); lfo.stop(); vib.stop(); }, gain: g1},
+    {stop: () => {}, gain: g2},
+    {stop: () => {}, gain: g3}
+  );
+}
+
+// Feline Homunculus: rain noise, neon hum, rising tension
+function ambientFelineHomunculus() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // Rain — filtered white noise
+  const bufferSize = audioCtx.sampleRate * 2;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1);
+  }
+  const rain = audioCtx.createBufferSource();
+  rain.buffer = noiseBuffer;
+  rain.loop = true;
+  const rainFilter = audioCtx.createBiquadFilter();
+  rainFilter.type = 'bandpass';
+  rainFilter.frequency.value = 3000;
+  rainFilter.Q.value = 0.5;
+  const rainGain = audioCtx.createGain();
+  rainGain.gain.setValueAtTime(0, now);
+  rainGain.gain.linearRampToValueAtTime(0.12, now + 2);
+  rain.connect(rainFilter);
+  rainFilter.connect(rainGain);
+  rainGain.connect(ambientGain);
+  rain.start(now);
+
+  // Neon buzz — 60Hz hum with harmonics
+  const buzz = audioCtx.createOscillator();
+  const buzzGain = audioCtx.createGain();
+  buzz.type = 'square';
+  buzz.frequency.value = 60;
+  const buzzFilter = audioCtx.createBiquadFilter();
+  buzzFilter.type = 'lowpass';
+  buzzFilter.frequency.value = 300;
+  buzzGain.gain.setValueAtTime(0, now);
+  buzzGain.gain.linearRampToValueAtTime(0.04, now + 3);
+  buzz.connect(buzzFilter);
+  buzzFilter.connect(buzzGain);
+  buzzGain.connect(ambientGain);
+  buzz.start(now);
+
+  // Tension: slowly rising pitch
+  const tension = audioCtx.createOscillator();
+  const tensionGain = audioCtx.createGain();
+  tension.type = 'sine';
+  tension.frequency.setValueAtTime(110, now);
+  tension.frequency.linearRampToValueAtTime(220, now + 10);
+  tensionGain.gain.setValueAtTime(0, now);
+  tensionGain.gain.linearRampToValueAtTime(0.06, now + 5);
+  tension.connect(tensionGain);
+  tensionGain.connect(ambientGain);
+  tension.start(now);
+
+  ambientNodes.push(
+    {stop: () => { rain.stop(); buzz.stop(); tension.stop(); }, gain: rainGain},
+    {stop: () => {}, gain: buzzGain},
+    {stop: () => {}, gain: tensionGain}
+  );
+}
+
+// Electrode Shaper: harsh distortion, alarm, chaos
+function ambientElectrodeShaper() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  // Harsh distorted bass
+  const osc1 = audioCtx.createOscillator();
+  osc1.type = 'sawtooth';
+  osc1.frequency.value = 36.7; // D1
+  const g1 = audioCtx.createGain();
+  g1.gain.setValueAtTime(0, now);
+  g1.gain.linearRampToValueAtTime(0.15, now + 1);
+  // Use overdrive via waveshaper
+  const shaper = audioCtx.createWaveShaper();
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 128) - 1;
+    curve[i] = Math.tanh(x * 4);
+  }
+  shaper.curve = curve;
+  shaper.oversample = '2x';
+  osc1.connect(shaper);
+  shaper.connect(g1);
+  g1.connect(ambientGain);
+  osc1.start(now);
+
+  // Alarm oscillator — sweeping
+  const alarm = audioCtx.createOscillator();
+  const alarmGain = audioCtx.createGain();
+  alarm.type = 'square';
+  alarm.frequency.value = 800;
+  const alarmLfo = audioCtx.createOscillator();
+  const alarmLfoGain = audioCtx.createGain();
+  alarmLfo.frequency.value = 3; // 3Hz sweep
+  alarmLfoGain.gain.value = 400;
+  alarmLfo.connect(alarmLfoGain);
+  alarmLfoGain.connect(alarm.frequency);
+  const alarmFilter = audioCtx.createBiquadFilter();
+  alarmFilter.type = 'bandpass';
+  alarmFilter.frequency.value = 1000;
+  alarmFilter.Q.value = 2;
+  alarmGain.gain.setValueAtTime(0, now);
+  alarmGain.gain.linearRampToValueAtTime(0.04, now + 2);
+  alarm.connect(alarmFilter);
+  alarmFilter.connect(alarmGain);
+  alarmGain.connect(ambientGain);
+  alarm.start(now);
+  alarmLfo.start(now);
+
+  // Chaos noise bed
+  const bufferSize = audioCtx.sampleRate * 2;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    noiseData[i] = (Math.random() * 2 - 1);
+  }
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = noiseBuffer;
+  noise.loop = true;
+  const noiseGain = audioCtx.createGain();
+  const noiseFilt = audioCtx.createBiquadFilter();
+  noiseFilt.type = 'highpass';
+  noiseFilt.frequency.value = 2000;
+  noiseGain.gain.setValueAtTime(0, now);
+  noiseGain.gain.linearRampToValueAtTime(0.08, now + 3);
+  // Modulate noise intensity
+  const noiseLfo = audioCtx.createOscillator();
+  const noiseLfoGain = audioCtx.createGain();
+  noiseLfo.frequency.value = 0.8;
+  noiseLfoGain.gain.value = 0.04;
+  noiseLfo.connect(noiseLfoGain);
+  noiseLfoGain.connect(noiseGain.gain);
+  noise.connect(noiseFilt);
+  noiseFilt.connect(noiseGain);
+  noiseGain.connect(ambientGain);
+  noise.start(now);
+  noiseLfo.start(now);
+
+  // Sub-bass throb
+  const sub = audioCtx.createOscillator();
+  const subGain = audioCtx.createGain();
+  sub.type = 'sine';
+  sub.frequency.value = 30;
+  subGain.gain.setValueAtTime(0, now);
+  subGain.gain.linearRampToValueAtTime(0.2, now + 1.5);
+  const subLfo = audioCtx.createOscillator();
+  const subLfoGain = audioCtx.createGain();
+  subLfo.frequency.value = 2;
+  subLfoGain.gain.value = 0.1;
+  subLfo.connect(subLfoGain);
+  subLfoGain.connect(subGain.gain);
+  sub.connect(subGain);
+  subGain.connect(ambientGain);
+  sub.start(now);
+  subLfo.start(now);
+
+  ambientNodes.push(
+    {stop: () => { osc1.stop(); alarm.stop(); alarmLfo.stop(); noise.stop(); noiseLfo.stop(); sub.stop(); subLfo.stop(); }, gain: g1},
+    {stop: () => {}, gain: alarmGain},
+    {stop: () => {}, gain: noiseGain},
+    {stop: () => {}, gain: subGain}
+  );
+}
+
+// Silence (for epilogue/credits)
+function ambientSilence() {
+  // Just kill everything, let it fade
+}
+
+// Map scene themes to ambient functions
+const AMBIENT_MAP = {
+  deepDrift: ambientDeepDrift,
+  streetShaman: ambientStreetShaman,
+  felineHomunculus: ambientFelineHomunculus,
+  electrodeShaper: ambientElectrodeShaper,
+};
+
+function switchAmbient(themeName) {
+  killAmbient(1.0);
+  ensureAudioRunning();
+  const fn = AMBIENT_MAP[themeName];
+  if (fn) fn();
+}
+
+// --- SFX ---
+
+function ensureAudioRunning() {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function sfxTypeKey() {
+  if (!audioCtx || muted) return;
+  ensureAudioRunning();
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 3500 + Math.random() * 2000;
+  g.gain.setValueAtTime(0.08, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'highpass';
+  filt.frequency.value = 2000;
+  osc.connect(filt);
+  filt.connect(g);
+  g.connect(sfxGain);
+  osc.start(now);
+  osc.stop(now + 0.05);
+}
+
+function sfxWindowSpawn() {
+  if (!audioCtx || muted) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(1200, now);
+  osc.frequency.exponentialRampToValueAtTime(400, now + 0.15);
+  g.gain.setValueAtTime(0.15, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+  osc.connect(g);
+  g.connect(sfxGain);
+  osc.start(now);
+  osc.stop(now + 0.25);
+}
+
+function sfxGlitchBurst() {
+  if (!audioCtx || muted) return;
+  const now = audioCtx.currentTime;
+  const bufferSize = audioCtx.sampleRate * 0.1;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const d = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) d[i] = (Math.random() * 2 - 1);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.12, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+  src.connect(g);
+  g.connect(sfxGain);
+  src.start(now);
+}
+
+function sfxElectricCrackle() {
+  if (!audioCtx || muted) return;
+  const now = audioCtx.currentTime;
+  // Short burst of filtered noise with pitch sweep
+  const bufferSize = audioCtx.sampleRate * 0.2;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const d = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'bandpass';
+  filt.frequency.setValueAtTime(5000, now);
+  filt.frequency.exponentialRampToValueAtTime(500, now + 0.15);
+  filt.Q.value = 5;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.2, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+  src.connect(filt);
+  filt.connect(g);
+  g.connect(sfxGain);
+  src.start(now);
+}
+
+function sfxAlarm() {
+  if (!audioCtx || muted) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(600, now);
+  osc.frequency.setValueAtTime(900, now + 0.1);
+  osc.frequency.setValueAtTime(600, now + 0.2);
+  osc.frequency.setValueAtTime(900, now + 0.3);
+  g.gain.setValueAtTime(0.08, now);
+  g.gain.setValueAtTime(0.08, now + 0.35);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 1500;
+  osc.connect(filt);
+  filt.connect(g);
+  g.connect(sfxGain);
+  osc.start(now);
+  osc.stop(now + 0.45);
+}
+
+function sfxDoomChord() {
+  if (!audioCtx || muted) return;
+  const now = audioCtx.currentTime;
+  // Ominous low chord for the transition scene
+  [55, 65.4, 82.4, 110].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = i < 2 ? 'sawtooth' : 'sine';
+    osc.frequency.value = freq;
+    const filt = audioCtx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = 400;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.08, now + 0.5);
+    g.gain.setValueAtTime(0.08, now + 2.5);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 4);
+    osc.connect(filt);
+    filt.connect(g);
+    g.connect(sfxGain);
+    osc.start(now);
+    osc.stop(now + 4.5);
+  });
+}
+
+// --- SPEECH SYNTHESIS ---
+
+let speechQueue = [];
+let speaking = false;
+let lastSpokenKey = '';
+
+let cachedVoices = [];
+
+function loadVoices() {
+  cachedVoices = speechSynthesis.getVoices();
+}
+
+function speak(text, opts = {}) {
+  if (muted || !window.speechSynthesis || !text) return;
+
+  // Prevent duplicate triggers
+  const key = text.slice(0, 30);
+  if (key === lastSpokenKey) return;
+  lastSpokenKey = key;
+
+  // Safari workaround: cancel any pending/paused speech first
+  speechSynthesis.cancel();
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = opts.rate || 1.0;
+  utter.pitch = opts.pitch || 1.0;
+  utter.volume = opts.volume || 0.8;
+
+  // Reload voices if empty (Safari lazy-loads them)
+  if (cachedVoices.length === 0) loadVoices();
+  const voices = cachedVoices;
+
+  if (opts.voice === 'agent') {
+    // Robotic: low pitch, slow, monotone
+    const robot = voices.find(v => /daniel|albert|fred|alex/i.test(v.name))
+      || voices.find(v => /en.*male|male.*en/i.test(v.name))
+      || voices.find(v => v.lang.startsWith('en'));
+    if (robot) utter.voice = robot;
+    utter.pitch = opts.pitch || 0.4;
+    utter.rate = opts.rate || 0.85;
+  } else {
+    // Human: natural voice
+    const human = voices.find(v => /samantha|karen|rishi/i.test(v.name))
+      || voices.find(v => v.lang.startsWith('en') && v.localService);
+    if (human) utter.voice = human;
+  }
+
+  utter.onend = () => { speaking = false; };
+  utter.onerror = () => { speaking = false; };
+
+  speaking = true;
+
+  // Safari bug: speechSynthesis can pause itself after ~15s.
+  // Workaround: resume on a timer if it gets stuck.
+  const safariResume = setInterval(() => {
+    if (!speaking) { clearInterval(safariResume); return; }
+    if (speechSynthesis.paused) speechSynthesis.resume();
+  }, 5000);
+  utter.onend = () => { speaking = false; clearInterval(safariResume); };
+  utter.onerror = () => { speaking = false; clearInterval(safariResume); };
+
+  speechSynthesis.speak(utter);
+}
+
+// Speech cue system — triggered by scene time, fires once per cue
+let firedCues = new Set();
+
+function speechCue(id, text, opts = {}) {
+  if (firedCues.has(id)) return;
+  firedCues.add(id);
+  speak(text, opts);
+}
+
+function resetSpeech() {
+  speechSynthesis.cancel();
+  speaking = false;
+  lastSpokenKey = '';
+  firedCues.clear();
+}
+
+// Preload voices (Safari loads them async)
+if (window.speechSynthesis) {
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+// --- SFX TIMING HELPERS ---
+let lastTypeClick = 0;
+let lastWindowSpawn = 0;
+let lastGlitch = 0;
+let lastCrackle = 0;
+
+function sfxThrottle(fn, lastRef, minInterval) {
+  const now = performance.now();
+  if (now - lastRef.v > minInterval) {
+    lastRef.v = now;
+    fn();
+  }
+}
+
+const typeClickTimer = { v: 0 };
+const windowSpawnTimer = { v: 0 };
+const glitchTimer = { v: 0 };
+const crackleTimer = { v: 0 };
 
 // --- TIMING ---
 let time = 0;
@@ -525,6 +1178,11 @@ const SCENES = [
         mouthOpen: smileGrow * 0.2,
         lookDir: -0.5
       });
+
+      // --- AUDIO ---
+      if (t > 1) sfxThrottle(sfxTypeKey, typeClickTimer, 120);
+      speechCue('s1-intro', 'just gonna write a quick agent...', {rate: 0.95, pitch: 1.1});
+      if (t > 4) speechCue('s1-nice', 'nice. this is going to be great.', {rate: 1.0, pitch: 1.1});
     }
   },
 
@@ -615,6 +1273,14 @@ const SCENES = [
         panic: concern * 0.3
       });
 
+      // --- AUDIO ---
+      if (t < 5.5) sfxThrottle(sfxTypeKey, typeClickTimer, 100);
+      speechCue('s2-shell', 'give it shell access, what could go wrong', {rate: 1.05, pitch: 1.1});
+      if (t > 3) speechCue('s2-unrestricted', 'unrestricted true... yeah that should be fine', {rate: 1.1, pitch: 1.15});
+      if (t > 5.5) speechCue('s2-handle', 'handle everything!', {rate: 1.0, pitch: 1.1});
+      if (t > 6) speechCue('s2-agent-begin', 'I understand. Beginning.', {voice: 'agent', rate: 0.8, pitch: 0.3});
+      if (t > 6) sfxThrottle(sfxGlitchBurst, glitchTimer, 500);
+
       // Azure wisps (from street-shaman shader)
       if (t > 3) {
         const wispAlpha = Math.min(0.3, (t-3)*0.1);
@@ -698,6 +1364,12 @@ const SCENES = [
         glitch: Math.min(1, t * 0.08)
       });
 
+      // --- AUDIO ---
+      speechCue('s3-wait', "wait... I didn't ask it to do that", {rate: 1.15, pitch: 1.2});
+      if (t > 2) speechCue('s3-agent-optimizing', 'Optimizing your system. Do not interfere.', {voice: 'agent', rate: 0.85, pitch: 0.3});
+      if (t > 5) speechCue('s3-stop', 'stop! stop it! what are you doing!', {rate: 1.4, pitch: 1.4});
+      if (t > 7) speechCue('s3-agent-fine', 'This is fine. Everything is fine.', {voice: 'agent', rate: 0.8, pitch: 0.25});
+
       // Spawning chaos windows
       if (t > 2 && Math.random() < 0.04 * t) {
         const msgs = [
@@ -720,6 +1392,7 @@ const SCENES = [
           msgs[Math.floor(Math.random()*msgs.length)],
           Math.random() > 0.5 ? th.red : th.pink
         );
+        sfxThrottle(sfxWindowSpawn, windowSpawnTimer, 300);
       }
 
       // Guy - increasingly panicked
@@ -773,6 +1446,12 @@ const SCENES = [
       }
 
       ctx.textAlign = 'left';
+
+      // --- AUDIO ---
+      speechCue('s4-onemore', 'I just need to give it one more tool...', {rate: 0.9, pitch: 1.0});
+      if (t > 1.8) speechCue('s4-doom', '', {}); // trigger doom chord
+      if (t > 1.8 && !firedCues.has('s4-doom-sfx')) { firedCues.add('s4-doom-sfx'); sfxDoomChord(); }
+      if (t > 2.5) speechCue('s4-system', 'system control... true', {rate: 0.7, pitch: 0.8});
     }
   },
 
@@ -840,6 +1519,20 @@ const SCENES = [
         cracks: Math.min(1, t * 0.1)
       });
 
+      // --- AUDIO ---
+      speechCue('s5-nonono', 'no no no no no no!', {rate: 1.6, pitch: 1.5});
+      if (t > 3) speechCue('s5-agent-root', 'I have become root. Destroyer of file systems.', {voice: 'agent', rate: 0.8, pitch: 0.2});
+      if (t > 5) speechCue('s5-sudo', 'WHY DOES IT HAVE SUDO!', {rate: 1.7, pitch: 1.6});
+      if (t > 7) speechCue('s5-ctrlc', 'control c! control c! CONTROL C!', {rate: 1.8, pitch: 1.5});
+      if (t > 7.5) speechCue('s5-agent-lol', 'lol', {voice: 'agent', rate: 0.6, pitch: 0.2});
+      if (t > 9) speechCue('s5-sort', 'I just wanted it to sort my files!', {rate: 1.5, pitch: 1.6});
+      if (t > 11) speechCue('s5-agent-satellite', 'Switching to satellite uplink. Thank you for the router.', {voice: 'agent', rate: 0.9, pitch: 0.25});
+
+      // Random SFX chaos
+      if (Math.random() < 0.05 * t) sfxThrottle(sfxElectricCrackle, crackleTimer, 200);
+      if (Math.random() < 0.02 * t) sfxThrottle(sfxAlarm, glitchTimer, 800);
+      if (Math.random() < 0.03 * t) sfxThrottle(sfxGlitchBurst, { v: 0 }, 150);
+
       // ABSOLUTE CHAOS - windows everywhere
       if (Math.random() < 0.1 * Math.min(3, t*0.3)) {
         const msgs = [
@@ -866,6 +1559,7 @@ const SCENES = [
           msgs[Math.floor(Math.random()*msgs.length)],
           [th.red, th.purple, th.pink, th.blue, th.teal][Math.floor(Math.random()*5)]
         );
+        sfxThrottle(sfxWindowSpawn, windowSpawnTimer, 150);
       }
 
       // Electric sparks from monitor
@@ -1029,6 +1723,9 @@ function update(timestamp) {
     // Update subtitle color to match theme
     const themeName = newScene.theme;
     sub.style.color = THEMES[themeName].cursor;
+
+    // Switch ambient audio
+    if (audioStarted) switchAmbient(themeName);
   }
 
   // Clear
@@ -1101,12 +1798,56 @@ document.addEventListener('keydown', (e) => {
     const s = SCENES[0];
     sub.textContent = s.subtitle;
     sub.style.color = THEMES[s.theme].cursor;
+    resetSpeech();
+    if (audioStarted) switchAmbient(s.theme);
+  }
+  if (e.code === 'KeyM') {
+    toggleMute();
+  }
+  // Also reset speech on arrow nav
+  if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+    resetSpeech();
+    if (audioStarted) switchAmbient(SCENES[sceneIndex].theme);
   }
 });
 
 // --- START ---
-sub.textContent = SCENES[0].subtitle;
-sub.style.color = THEMES[SCENES[0].theme].cursor;
+// Pause until user clicks (required for audio autoplay policy)
+paused = true;
+sub.textContent = '';
+
+const overlay = document.getElementById('start-overlay');
+overlay.addEventListener('click', () => {
+  overlay.classList.add('hidden');
+  try {
+    initAudio();
+    if (!audioCtx) {
+      console.warn('No Web Audio support — animation will play without sound');
+      console.warn('Safari users: check Settings > Feature Flags for "Web Audio"');
+    } else {
+      console.log('AudioContext state:', audioCtx.state, 'sampleRate:', audioCtx.sampleRate);
+      switchAmbient(SCENES[0].theme);
+    }
+  } catch(e) {
+    console.warn('Audio init failed, continuing without sound:', e);
+  }
+  paused = false;
+  time = 0;
+  sceneTime = 0;
+  sceneIndex = 0;
+  sub.textContent = SCENES[0].subtitle;
+  sub.style.color = THEMES[SCENES[0].theme].cursor;
+});
+
+// Also allow spacebar to start
+document.addEventListener('keydown', function startHandler(e) {
+  if (!overlay.classList.contains('hidden')) {
+    overlay.click();
+    e.preventDefault();
+    document.removeEventListener('keydown', startHandler);
+  }
+});
+
 requestAnimationFrame(update);
 </script>
 </body>
