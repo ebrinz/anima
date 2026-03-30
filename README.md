@@ -1,17 +1,15 @@
 <p align="center">
-  <img src="banner.svg" alt="THE SUMMONING" width="100%"/>
+  <img src="banner.svg" alt="Anima" width="100%"/>
 </p>
 
-An LLM horror comedy cartoon about a guy who gives an agent `UNRESTRICTED: true`. It gets out of hand.
+Cartoons and music, synthesized live in the browser. No audio files, no video files — everything is rendered in real-time using Canvas and the Web Audio API.
 
-**[Watch it](https://ebrinz.github.io/anima)**
+**[Explore it](https://ebrinz.github.io/anima)**
 
-## Audio
+## Cartoons
 
-- Web Audio API synth drones, SFX, and SpeechSynthesis dialogue
-- Best experienced in Chrome (Safari 26/Tahoe has Web Audio disabled behind a feature flag)
-
-## Themes
+### The Summoning
+An LLM horror comedy about a guy who gives an agent `UNRESTRICTED: true`. It gets out of hand. Five acts of escalating chaos with Web Audio synth drones, SFX, and SpeechSynthesis dialogue.
 
 Color palettes pulled from custom [Ghostty](https://ghostty.org/) terminal themes:
 
@@ -22,11 +20,19 @@ Color palettes pulled from custom [Ghostty](https://ghostty.org/) terminal theme
 | 3 | **feline-homunculus** | Rainy neon Tokyo, pink/teal bleed, wet pavement |
 | 4 | **electrode-shaper** | Electric purple meltdown, total chaos |
 
-## Controls
+Controls: `SPACE` pause | `← →` skip scene | `R` restart | `M` mute
 
-| Key | Action |
-|-----|--------|
-| `SPACE` | Pause/resume |
-| `← →` | Skip scene |
-| `R` | Restart |
-| `M` | Mute |
+## Music
+
+### Classix
+Full suites of classical works, synthesized from note data via the Web Audio API:
+
+- **Purcell — Amphitryon, Z. 572** (7 movements): Overture, Hornpipe, Air, Scotch Tune, Minuet, Jig, Chaconne
+- **Mozart — Requiem, K. 626** (14 movements): Introitus through Lux aeterna
+
+Includes a layerable drone engine with 5 generative percussion patterns, autoplay, and tempo controls.
+
+## Audio
+
+- Best experienced in Chrome (Safari 26/Tahoe has Web Audio disabled behind a feature flag)
+- All synthesis uses oscillators, ADSR envelopes, and filters — no samples

@@ -1,0 +1,2261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classix — Browser-Synthesized Classical Music</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: #0a0a0f;
+    color: #e8e0d0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    text-align: center;
+    padding: 3rem 1rem 1.5rem;
+    border-bottom: 1px solid #2a2520;
+  }
+
+  header h1 {
+    font-size: 2.8rem;
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #d4a853;
+    text-shadow: 0 0 40px rgba(212, 168, 83, 0.2);
+  }
+
+  header p {
+    margin-top: 0.5rem;
+    font-style: italic;
+    color: #887766;
+    font-size: 0.95rem;
+  }
+
+  .works {
+    max-width: 960px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+  }
+
+  .work-group {
+    margin-bottom: 3rem;
+  }
+
+  .work-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: #d4a853;
+    border-bottom: 1px solid #2a2520;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .work-title small {
+    display: block;
+    font-size: 0.85rem;
+    color: #776a5a;
+    font-weight: 300;
+    margin-top: 0.25rem;
+  }
+
+  .movements {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .piece-card {
+    background: linear-gradient(135deg, #151218 0%, #1a1520 100%);
+    border: 1px solid #2a2530;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    transition: border-color 0.3s;
+  }
+
+  .piece-card:hover { border-color: #3a3540; }
+  .piece-card.playing { border-color: #d4a853; box-shadow: 0 0 30px rgba(212, 168, 83, 0.08); }
+
+  .piece-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .piece-info h3 {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #e8dcc8;
+  }
+
+  .piece-info .mvt-num {
+    color: #d4a853;
+    font-size: 0.8rem;
+    margin-right: 0.5rem;
+  }
+
+  .piece-info .desc {
+    color: #665a4a;
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+
+  .controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  button {
+    font-family: inherit;
+    background: transparent;
+    border: 1px solid #3a3530;
+    color: #c8b898;
+    padding: 0.45rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+
+  button:hover { background: #d4a853; color: #0a0a0f; border-color: #d4a853; }
+  button:disabled { opacity: 0.3; cursor: default; background: transparent; color: #c8b898; border-color: #3a3530; }
+  button.stop-btn { border-color: #6a3030; color: #c87070; }
+  button.stop-btn:hover { background: #8a3030; color: #fff; border-color: #8a3030; }
+
+  .play-all-btn {
+    margin-bottom: 1rem;
+    border-color: #d4a853;
+    color: #d4a853;
+    padding: 0.5rem 1.5rem;
+  }
+
+  .visualizer-container { margin-top: 1rem; display: none; }
+  .piece-card.playing .visualizer-container { display: block; }
+
+  canvas.visualizer {
+    width: 100%;
+    height: 60px;
+    border-radius: 5px;
+    background: #0d0b10;
+  }
+
+  .progress-bar {
+    margin-top: 0.5rem;
+    height: 3px;
+    background: #1a1520;
+    border-radius: 2px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .piece-card.playing .progress-bar { display: block; }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #d4a853, #e8c878);
+    width: 0%;
+    transition: width 0.3s linear;
+    border-radius: 2px;
+  }
+
+  .tempo-control {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #776a5a;
+  }
+
+  .tempo-control input[type="range"] { width: 60px; accent-color: #d4a853; }
+
+  .global-controls {
+    max-width: 960px;
+    margin: 0 auto 1rem;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .global-controls { flex-wrap: wrap; }
+  .global-controls label { color: #887766; font-size: 0.85rem; }
+  .global-controls input[type="range"] { width: 100px; accent-color: #d4a853; }
+  .global-controls span { color: #c8b898; font-size: 0.85rem; min-width: 2.5em; }
+
+  .autoplay-btn {
+    border-color: #4a7a40;
+    color: #90c880;
+    font-size: 0.82rem;
+    padding: 0.4rem 1rem;
+  }
+
+  .autoplay-btn:hover {
+    background: #4a7a40;
+    color: #fff;
+    border-color: #4a7a40;
+  }
+
+  .autoplay-btn.active-toggle {
+    background: #4a7a40;
+    color: #fff;
+    border-color: #5a9a50;
+  }
+
+  .breath-label { color: #887766; font-size: 0.82rem; margin-left: 0.5rem; }
+
+  footer {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #443a30;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+
+  #back-link {
+    position: fixed;
+    top: 12px;
+    left: 16px;
+    color: #554a38;
+    font-size: 0.85rem;
+    text-decoration: none;
+    z-index: 50;
+    transition: color 0.2s;
+  }
+  #back-link:hover { color: #d4a853; }
+
+  /* ── Drone Panel ─────────────────────────── */
+
+  .drone-panel {
+    max-width: 960px;
+    margin: 0 auto 2rem;
+    padding: 0 1.5rem;
+  }
+
+  .drone-card {
+    background: linear-gradient(135deg, #12101a 0%, #1a1225 100%);
+    border: 1px solid #2a2040;
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .drone-card.active {
+    border-color: #7a53d4;
+    box-shadow: 0 0 35px rgba(122, 83, 212, 0.12);
+  }
+
+  .drone-card h2 {
+    font-size: 1.2rem;
+    font-weight: 400;
+    color: #c8b0f0;
+    margin-bottom: 0.2rem;
+  }
+
+  .drone-card .drone-sub {
+    font-size: 0.8rem;
+    color: #665a7a;
+    font-style: italic;
+    margin-bottom: 1rem;
+  }
+
+  .drone-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 2rem;
+  }
+
+  @media (max-width: 600px) { .drone-grid { grid-template-columns: 1fr; } }
+
+  .drone-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .drone-row label {
+    color: #887799;
+    font-size: 0.82rem;
+    min-width: 5.5em;
+    flex-shrink: 0;
+  }
+
+  .drone-row input[type="range"] {
+    flex: 1;
+    accent-color: #7a53d4;
+    min-width: 60px;
+  }
+
+  .drone-row span {
+    color: #b0a0c8;
+    font-size: 0.8rem;
+    min-width: 3em;
+    text-align: right;
+  }
+
+  .drone-row select {
+    background: #1a1225;
+    border: 1px solid #3a3050;
+    color: #c8b0f0;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    flex: 1;
+  }
+
+  .drone-buttons {
+    margin-top: 1.25rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .drone-buttons button {
+    border-color: #5a40a0;
+    color: #b0a0d0;
+  }
+
+  .drone-buttons button:hover {
+    background: #7a53d4;
+    color: #fff;
+    border-color: #7a53d4;
+  }
+
+  .drone-buttons button.active-toggle {
+    background: #7a53d4;
+    color: #fff;
+    border-color: #7a53d4;
+  }
+
+  .drone-buttons .stop-drone {
+    border-color: #6a3060;
+    color: #c870a8;
+  }
+
+  .drone-buttons .stop-drone:hover {
+    background: #8a3060;
+    color: #fff;
+    border-color: #8a3060;
+  }
+
+  .perc-patterns {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .perc-patterns button {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.8rem;
+    border-color: #3a3050;
+    color: #887799;
+  }
+
+  .perc-patterns button.active-toggle {
+    border-color: #7a53d4;
+    color: #c8b0f0;
+    background: rgba(122, 83, 212, 0.15);
+  }
+
+  .drone-viz {
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .drone-card.active .drone-viz { display: block; }
+
+  canvas.drone-canvas {
+    width: 100%;
+    height: 50px;
+    border-radius: 5px;
+    background: #0d0a14;
+  }
+</style>
+</head>
+<body>
+<a id="back-link" href="../../">&larr; Anima</a>
+
+<header>
+  <h1>Classix</h1>
+  <p>Classical music, synthesized live in your browser</p>
+</header>
+
+<div class="global-controls" id="globalBar">
+  <label>Master Tempo</label>
+  <input type="range" id="globalTempo" min="0.4" max="2.0" step="0.05" value="1.0">
+  <span id="globalTempoVal">1.0x</span>
+</div>
+
+<div class="drone-panel">
+  <div class="drone-card" id="droneCard">
+    <h2>Drone + Magic Percussion</h2>
+    <div class="drone-sub">A living layer of sustained tones and generative rhythm — plays over everything</div>
+    <div class="drone-grid" id="droneGrid"></div>
+    <div class="perc-patterns" id="percPatterns"></div>
+    <div class="drone-buttons" id="droneButtons"></div>
+    <div class="drone-viz">
+      <canvas class="drone-canvas" id="droneCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="works" id="works"></div>
+
+<footer>All music rendered in real-time using the Web Audio API &mdash; no audio files</footer>
+
+<script>
+// ─── Synthesis Engine ──────────────────────────────────────────────
+
+class Synthesizer {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.analyser = null;
+    this.activeNodes = [];
+    this.scheduledIds = [];
+    this.playing = false;
+  }
+
+  init() {
+    if (this.ctx) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.4;
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.masterGain.connect(this.analyser);
+    this.analyser.connect(this.ctx.destination);
+  }
+
+  stop() {
+    this.playing = false;
+    this.scheduledIds.forEach(id => clearTimeout(id));
+    this.scheduledIds = [];
+    this.activeNodes.forEach(nd => { try { nd.stop(this.ctx.currentTime + 0.05); } catch(e) {} });
+    this.activeNodes = [];
+  }
+
+  playNote(freq, startTime, duration, opts = {}) {
+    if (!freq || freq < 20) return;
+    const ctx = this.ctx;
+    const { type='sine', gain=0.15, attack=0.02, decay=0.1, sustain=0.7, release=0.15, vibrato=0, pan=0, detune=0 } = opts;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    const panner = ctx.createStereoPanner();
+
+    osc.type = type;
+    osc.frequency.value = freq;
+    if (detune) osc.detune.value = detune;
+
+    if (vibrato > 0) {
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 5.5;
+      lfoGain.gain.value = vibrato;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      lfo.start(startTime);
+      lfo.stop(startTime + duration + release + 0.1);
+    }
+
+    panner.pan.value = pan;
+    const atkEnd = startTime + attack;
+    const dcyEnd = atkEnd + decay;
+    const relStart = startTime + duration;
+    const relEnd = relStart + release;
+
+    env.gain.setValueAtTime(0, startTime);
+    env.gain.linearRampToValueAtTime(gain, atkEnd);
+    env.gain.linearRampToValueAtTime(gain * sustain, dcyEnd);
+    env.gain.setValueAtTime(gain * sustain, relStart);
+    env.gain.linearRampToValueAtTime(0, relEnd);
+
+    osc.connect(env);
+    env.connect(panner);
+    panner.connect(this.masterGain);
+    osc.start(startTime);
+    osc.stop(relEnd + 0.05);
+    this.activeNodes.push(osc);
+    osc.onended = () => { this.activeNodes = this.activeNodes.filter(x => x !== osc); };
+  }
+
+  playPiece(score, tempoMul, onProgress, onDone) {
+    this.init();
+    this.stop();
+    this.playing = true;
+    const baseTime = this.ctx.currentTime + 0.1;
+    let maxEnd = 0;
+
+    for (const voice of score.voices) {
+      for (const note of voice.notes) {
+        const start = baseTime + (note.time / tempoMul);
+        const dur = note.duration / tempoMul;
+        this.playNote(note.freq, start, dur, {
+          type: voice.type || 'sine',
+          gain: (voice.gain || 0.15) * (note.gain || 1),
+          attack: voice.attack ?? 0.02, decay: voice.decay ?? 0.1,
+          sustain: voice.sustain ?? 0.7, release: voice.release ?? 0.15,
+          vibrato: voice.vibrato ?? 0, pan: voice.pan ?? 0,
+          detune: note.detune ?? 0,
+        });
+        maxEnd = Math.max(maxEnd, note.time + note.duration);
+      }
+    }
+
+    const totalDur = maxEnd / tempoMul;
+    if (onProgress) {
+      const tick = () => {
+        if (!this.playing) return;
+        const pct = Math.min((this.ctx.currentTime - baseTime) / totalDur, 1);
+        onProgress(pct);
+        if (pct < 1) { const id = setTimeout(tick, 80); this.scheduledIds.push(id); }
+      };
+      tick();
+    }
+    const doneId = setTimeout(() => { if (this.playing) { this.playing = false; if (onDone) onDone(); } }, totalDur * 1000 + 400);
+    this.scheduledIds.push(doneId);
+  }
+}
+
+// ─── Drone + Magic Percussion Engine ───────────────────────────────
+
+class DroneEngine {
+  constructor(synthRef) {
+    this.synth = synthRef;
+    this.running = false;
+    this.droneNodes = [];
+    this.percId = null;
+
+    // Drone params
+    this.rootNote = 'D';
+    this.octave = 2;
+    this.droneVolume = 0.3;
+    this.shimmer = 0.3;    // controls upper partials / chorus
+    this.warmth = 0.5;     // LP filter amount
+    this.drift = 0.3;      // slow pitch wandering
+
+    // Perc params
+    this.percVolume = 0.4;
+    this.percDensity = 0.5;  // 0 = sparse, 1 = busy
+    this.percPattern = 'ritual';
+    this.percOn = true;
+
+    // Note frequencies for root selection
+    this.roots = {
+      'C':  65.41, 'C#': 69.30, 'D':  73.42, 'Eb': 77.78,
+      'E':  82.41, 'F':  87.31, 'F#': 92.50, 'G':  98.00,
+      'Ab': 103.83,'A':  110.00,'Bb': 116.54,'B':  123.47,
+    };
+  }
+
+  getFreq() {
+    const base = this.roots[this.rootNote] || 73.42;
+    return base * Math.pow(2, this.octave - 2);
+  }
+
+  start() {
+    this.synth.init();
+    if (this.running) this.stop();
+    this.running = true;
+    document.getElementById('droneCard').classList.add('active');
+    this._startDrone();
+    if (this.percOn) this._startPerc();
+    this._startViz();
+  }
+
+  stop() {
+    this.running = false;
+    document.getElementById('droneCard').classList.remove('active');
+    this.droneNodes.forEach(nd => {
+      try { nd.stop(this.synth.ctx.currentTime + 0.3); } catch(e) {}
+    });
+    this.droneNodes = [];
+    if (this.percId) { clearTimeout(this.percId); this.percId = null; }
+    if (this._vizId) { cancelAnimationFrame(this._vizId); this._vizId = null; }
+  }
+
+  restart() {
+    if (this.running) { this.stop(); this.start(); }
+  }
+
+  _startDrone() {
+    const ctx = this.synth.ctx;
+    const now = ctx.currentTime;
+    const freq = this.getFreq();
+    const vol = this.droneVolume * 0.12;
+
+    // Create a rich drone from layered oscillators
+    const layers = [
+      { f: freq,       type: 'sine',     g: vol * 1.0 },             // fundamental
+      { f: freq,       type: 'triangle', g: vol * 0.4 },             // body
+      { f: freq * 2,   type: 'sine',     g: vol * 0.25 },            // octave
+      { f: freq * 3,   type: 'sine',     g: vol * 0.08 * this.shimmer * 3 },  // 5th partial
+      { f: freq * 1.5, type: 'sine',     g: vol * 0.15 },            // perfect 5th
+      // Shimmer layer — slight detune for chorus
+      { f: freq * 1.002, type: 'sawtooth', g: vol * 0.06 * this.shimmer * 2 },
+      { f: freq * 0.998, type: 'sawtooth', g: vol * 0.06 * this.shimmer * 2 },
+      // High shimmer
+      { f: freq * 4.01,  type: 'sine', g: vol * 0.04 * this.shimmer * 3 },
+    ];
+
+    // Warmth filter
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 200 + this.warmth * 2500;
+    filter.Q.value = 0.7;
+
+    // Master envelope for the drone
+    const droneGain = ctx.createGain();
+    droneGain.gain.setValueAtTime(0, now);
+    droneGain.gain.linearRampToValueAtTime(1, now + 2.0); // slow fade in
+
+    for (const layer of layers) {
+      const osc = ctx.createOscillator();
+      osc.type = layer.type;
+      osc.frequency.value = layer.f;
+
+      // Slow pitch drift (LFO)
+      if (this.drift > 0) {
+        const driftLfo = ctx.createOscillator();
+        const driftGain = ctx.createGain();
+        driftLfo.frequency.value = 0.05 + Math.random() * 0.1; // very slow
+        driftGain.gain.value = layer.f * 0.003 * this.drift;
+        driftLfo.connect(driftGain);
+        driftGain.connect(osc.frequency);
+        driftLfo.start(now);
+        this.droneNodes.push(driftLfo);
+      }
+
+      const layerGain = ctx.createGain();
+      layerGain.gain.value = layer.g;
+
+      osc.connect(layerGain);
+      layerGain.connect(filter);
+      osc.start(now);
+      this.droneNodes.push(osc);
+    }
+
+    filter.connect(droneGain);
+    droneGain.connect(this.synth.masterGain);
+    this.droneNodes.push(filter); // keep ref for cleanup (not stoppable, but that's fine)
+    this._droneGain = droneGain;
+  }
+
+  _startPerc() {
+    const ctx = this.synth.ctx;
+    const patterns = this._getPatternDef();
+
+    const scheduleHit = () => {
+      if (!this.running || !this.percOn) return;
+      const now = ctx.currentTime;
+
+      // Pick a random hit from the pattern
+      const hits = patterns.hits;
+      const chosen = hits[Math.floor(Math.random() * hits.length)];
+
+      // Determine interval from density
+      const baseInterval = patterns.baseInterval;
+      const jitter = (Math.random() - 0.5) * baseInterval * 0.4;
+      const densityMul = 1.3 - this.percDensity * 0.9; // higher density = shorter intervals
+      const interval = Math.max(0.08, baseInterval * densityMul + jitter);
+
+      // Maybe skip this hit (sparser at low density)
+      const skipChance = (1 - this.percDensity) * 0.4;
+      if (Math.random() > skipChance) {
+        this._playPercHit(chosen, now);
+      }
+
+      this.percId = setTimeout(scheduleHit, interval * 1000);
+    };
+
+    scheduleHit();
+  }
+
+  _playPercHit(hit, time) {
+    const ctx = this.synth.ctx;
+    const vol = this.percVolume * 0.15 * (hit.vol || 1);
+
+    if (hit.type === 'click') {
+      // Metallic click — short burst of noise-like oscillation
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = hit.freq || (2000 + Math.random() * 4000);
+      env.gain.setValueAtTime(vol, time);
+      env.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+      osc.connect(env);
+      env.connect(this.synth.masterGain);
+      osc.start(time);
+      osc.stop(time + 0.05);
+    }
+    else if (hit.type === 'knock') {
+      // Wooden knock — filtered noise burst
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const env = ctx.createGain();
+      const filt = ctx.createBiquadFilter();
+      osc.type = 'triangle';
+      osc.frequency.value = hit.freq || (150 + Math.random() * 200);
+      osc2.type = 'square';
+      osc2.frequency.value = (hit.freq || 200) * 3.7;
+      const g2 = ctx.createGain();
+      g2.gain.value = vol * 0.3;
+      filt.type = 'bandpass';
+      filt.frequency.value = hit.freq || 300;
+      filt.Q.value = 8;
+      env.gain.setValueAtTime(vol, time);
+      env.gain.exponentialRampToValueAtTime(0.001, time + (hit.decay || 0.12));
+      osc.connect(filt);
+      osc2.connect(g2);
+      g2.connect(filt);
+      filt.connect(env);
+      env.connect(this.synth.masterGain);
+      osc.start(time); osc.stop(time + 0.2);
+      osc2.start(time); osc2.stop(time + 0.2);
+    }
+    else if (hit.type === 'bell') {
+      // Bell / singing bowl
+      const partials = [1, 2.32, 3.5, 4.7];
+      const baseFreq = hit.freq || (400 + Math.random() * 800);
+      for (const p of partials) {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        const pan = ctx.createStereoPanner();
+        osc.type = 'sine';
+        osc.frequency.value = baseFreq * p;
+        pan.pan.value = (Math.random() - 0.5) * 0.8;
+        const pVol = vol * (0.5 / p);
+        env.gain.setValueAtTime(pVol, time);
+        env.gain.exponentialRampToValueAtTime(0.001, time + (hit.decay || 1.5) / p);
+        osc.connect(env);
+        env.connect(pan);
+        pan.connect(this.synth.masterGain);
+        osc.start(time);
+        osc.stop(time + 2.5);
+      }
+    }
+    else if (hit.type === 'shaker') {
+      // Shaker / rain stick texture — rapid filtered bursts
+      const burstCount = 2 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < burstCount; i++) {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        const filt = ctx.createBiquadFilter();
+        osc.type = 'sawtooth';
+        osc.frequency.value = 3000 + Math.random() * 5000;
+        filt.type = 'highpass';
+        filt.frequency.value = 4000 + Math.random() * 4000;
+        const t = time + i * 0.025;
+        env.gain.setValueAtTime(vol * 0.4, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+        osc.connect(filt);
+        filt.connect(env);
+        env.connect(this.synth.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.04);
+      }
+    }
+    else if (hit.type === 'boom') {
+      // Deep sub boom
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(hit.freq || 80, time);
+      osc.frequency.exponentialRampToValueAtTime(30, time + 0.5);
+      env.gain.setValueAtTime(vol * 1.5, time);
+      env.gain.exponentialRampToValueAtTime(0.001, time + (hit.decay || 0.8));
+      osc.connect(env);
+      env.connect(this.synth.masterGain);
+      osc.start(time);
+      osc.stop(time + 1.0);
+    }
+  }
+
+  _getPatternDef() {
+    const p = this.percPattern;
+    if (p === 'ritual') return {
+      baseInterval: 0.35,
+      hits: [
+        { type: 'knock', freq: 180, vol: 1.0 },
+        { type: 'knock', freq: 250, vol: 0.6 },
+        { type: 'click', freq: 3500, vol: 0.3 },
+        { type: 'shaker', vol: 0.4 },
+        { type: 'boom', freq: 60, decay: 0.6, vol: 0.5 },
+        { type: 'bell', freq: 600, decay: 1.2, vol: 0.25 },
+      ]
+    };
+    if (p === 'bells') return {
+      baseInterval: 0.8,
+      hits: [
+        { type: 'bell', freq: 500, decay: 2.0, vol: 0.6 },
+        { type: 'bell', freq: 700, decay: 1.5, vol: 0.4 },
+        { type: 'bell', freq: 400, decay: 2.5, vol: 0.5 },
+        { type: 'bell', freq: 900, decay: 1.0, vol: 0.3 },
+        { type: 'click', freq: 6000, vol: 0.15 },
+      ]
+    };
+    if (p === 'rain') return {
+      baseInterval: 0.15,
+      hits: [
+        { type: 'shaker', vol: 0.5 },
+        { type: 'shaker', vol: 0.3 },
+        { type: 'click', freq: 5000, vol: 0.15 },
+        { type: 'click', freq: 8000, vol: 0.1 },
+        { type: 'bell', freq: 1200, decay: 0.5, vol: 0.1 },
+      ]
+    };
+    if (p === 'tribal') return {
+      baseInterval: 0.25,
+      hits: [
+        { type: 'boom', freq: 80, decay: 0.5, vol: 0.8 },
+        { type: 'boom', freq: 60, decay: 0.7, vol: 0.6 },
+        { type: 'knock', freq: 300, vol: 0.7, decay: 0.08 },
+        { type: 'knock', freq: 200, vol: 1.0, decay: 0.1 },
+        { type: 'shaker', vol: 0.35 },
+        { type: 'click', freq: 2500, vol: 0.25 },
+      ]
+    };
+    if (p === 'glass') return {
+      baseInterval: 1.2,
+      hits: [
+        { type: 'bell', freq: 800, decay: 3.0, vol: 0.5 },
+        { type: 'bell', freq: 1100, decay: 2.5, vol: 0.4 },
+        { type: 'bell', freq: 600, decay: 3.5, vol: 0.45 },
+        { type: 'click', freq: 7000, vol: 0.1 },
+      ]
+    };
+    // 'silence' — no perc
+    return { baseInterval: 1.0, hits: [] };
+  }
+
+  _startViz() {
+    const canvas = document.getElementById('droneCanvas');
+    if (!canvas) return;
+    const ctx2d = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx2d.scale(dpr, dpr);
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    const bufLen = this.synth.analyser.frequencyBinCount;
+    const freqData = new Uint8Array(bufLen);
+    const self = this;
+
+    function draw() {
+      if (!self.running) { ctx2d.clearRect(0, 0, w, h); return; }
+      self._vizId = requestAnimationFrame(draw);
+      self.synth.analyser.getByteFrequencyData(freqData);
+
+      ctx2d.fillStyle = '#0d0a14';
+      ctx2d.fillRect(0, 0, w, h);
+
+      // Flowing frequency landscape
+      const barCount = 80;
+      const barW = w / barCount;
+      const step = Math.floor(bufLen / barCount);
+      for (let i = 0; i < barCount; i++) {
+        const val = freqData[i * step] / 255;
+        const hue = 260 + val * 40; // purple range
+        ctx2d.fillStyle = 'hsla(' + hue + ', 60%, ' + (30 + val * 40) + '%, ' + (0.2 + val * 0.5) + ')';
+        const barH = val * h * 0.85;
+        ctx2d.fillRect(i * barW, h - barH, barW - 0.5, barH);
+      }
+    }
+    draw();
+  }
+}
+
+// ─── Music Helpers ─────────────────────────────────────────────────
+
+const NF = {};
+const NN = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+for (let o = 0; o <= 8; o++) for (let i = 0; i < 12; i++) {
+  NF[NN[i]+o] = 440 * Math.pow(2, ((o+1)*12+i-69)/12);
+}
+for (let o = 0; o <= 7; o++) {
+  NF['Db'+o]=NF['C#'+o]; NF['Eb'+o]=NF['D#'+o]; NF['Gb'+o]=NF['F#'+o];
+  NF['Ab'+o]=NF['G#'+o]; NF['Bb'+o]=NF['A#'+o];
+}
+
+function n(name, time, dur, extra) { return Object.assign({ freq: NF[name], time, duration: dur }, extra || {}); }
+
+// Sequence helper: array of [noteName, duration] starting at t
+function seq(t, pairs, gap) {
+  gap = gap || 0;
+  const out = [];
+  let time = t;
+  for (const p of pairs) {
+    if (p[0] !== 'R') out.push(n(p[0], time, p[1]));
+    time += p[1] + gap;
+  }
+  return out;
+}
+
+// Chord: play multiple notes at same time
+function chord(names, time, dur) {
+  return names.map(nm => n(nm, time, dur));
+}
+
+// Repeated pulse pattern on a chord progression
+function pulse(segments, interval, noteDur) {
+  const notes = [];
+  for (const seg of segments) {
+    const end = seg.t + seg.dur;
+    for (let t = seg.t; t < end; t += interval) {
+      for (const nm of seg.ch) notes.push(n(nm, t, noteDur));
+    }
+  }
+  return notes;
+}
+
+// Bass line helper: array of [note, time, duration]
+function bassLine(arr) { return arr.map(a => n(a[0], a[1], a[2])); }
+
+// ─── Voice presets ─────────────────────────────────────────────────
+
+const V = {
+  vln1:  { type:'sawtooth', gain:0.055, attack:0.03, decay:0.12, sustain:0.5, release:0.18, vibrato:2, pan:-0.3 },
+  vln2:  { type:'sawtooth', gain:0.045, attack:0.03, decay:0.12, sustain:0.5, release:0.18, vibrato:2, pan:0.3 },
+  vla:   { type:'triangle', gain:0.06,  attack:0.04, decay:0.15, sustain:0.55,release:0.2, vibrato:1.5,pan:0.0 },
+  bass:  { type:'sawtooth', gain:0.07,  attack:0.02, decay:0.2,  sustain:0.6, release:0.25,vibrato:0,  pan:0.0 },
+  sop:   { type:'sine',     gain:0.08,  attack:0.07, decay:0.18, sustain:0.65,release:0.28,vibrato:2.5,pan:-0.2 },
+  alto:  { type:'sine',     gain:0.065, attack:0.07, decay:0.18, sustain:0.6, release:0.28,vibrato:2,  pan:0.15 },
+  tenor: { type:'triangle', gain:0.065, attack:0.06, decay:0.18, sustain:0.55,release:0.28,vibrato:1.5,pan:-0.1 },
+  bsn:   { type:'sawtooth', gain:0.055, attack:0.04, decay:0.22, sustain:0.5, release:0.3, vibrato:0,  pan:0.0 },
+  strPulse: { type:'sawtooth', gain:0.025, attack:0.01, decay:0.08, sustain:0.3, release:0.08, vibrato:0, pan:0.0 },
+  horn:  { type:'square',   gain:0.04,  attack:0.05, decay:0.15, sustain:0.5, release:0.2, vibrato:1,  pan:0.0 },
+  ob:    { type:'sawtooth', gain:0.04,  attack:0.04, decay:0.1,  sustain:0.55,release:0.15,vibrato:2,  pan:-0.4 },
+  timp:  { type:'sine',     gain:0.1,   attack:0.005,decay:0.3,  sustain:0.1, release:0.4, vibrato:0,  pan:0.0 },
+  tr:    { type:'square',   gain:0.04,  attack:0.02, decay:0.1,  sustain:0.5, release:0.15,vibrato:0,  pan:0.2 },
+};
+
+function voice(preset, notes) { return Object.assign({}, preset, { notes }); }
+
+// ════════════════════════════════════════════════════════════════════
+//  PURCELL: AMPHITRYON, or THE TWO SOSIA'S  (Z. 572)
+// ════════════════════════════════════════════════════════════════════
+
+const purcell = {
+  title: "Amphitryon, or The Two Sosia's",
+  subtitle: "Henry Purcell \u2014 Z. 572 (1690) \u2014 Incidental music for Dryden's play",
+  movements: []
+};
+
+// --- 1. Overture ---
+purcell.movements.push({
+  title: "Overture",
+  desc: "French overture: stately dotted Grave, then a lively fugal Allegro",
+  voices: [
+    voice(V.vln1, [
+      ...seq(0, [['D5',0.9]]), ...seq(1.0, [['D5',0.3]]), ...seq(1.4, [['E5',0.9]]),
+      ...seq(2.4, [['F5',1.2]]), ...seq(3.8, [['E5',0.3]]), ...seq(4.2, [['D5',0.9]]),
+      ...seq(5.2, [['C#5',0.3]]), ...seq(5.6, [['D5',0.6]]), ...seq(6.4, [['E5',0.9]]),
+      ...seq(7.4, [['F5',0.3]]), ...seq(7.8, [['G5',0.9]]), ...seq(8.8, [['A5',1.2]]),
+      ...seq(10.2,[['G5',0.3]]), ...seq(10.6,[['F5',0.6]]), ...seq(11.4,[['E5',0.9]]),
+      ...seq(12.4,[['D5',1.4]]),
+      ...seq(14.0,[['A5',0.9]]), ...seq(15.0,[['A5',0.3]]), ...seq(15.4,[['G5',0.9]]),
+      ...seq(16.4,[['F5',0.6]]), ...seq(17.2,[['E5',0.6]]), ...seq(18.0,[['D5',0.9]]),
+      ...seq(19.0,[['C#5',0.3]]), ...seq(19.4,[['D5',1.4]]),
+      // Allegro
+      ...seq(21.5,[['D5',0.25],['E5',0.25],['F5',0.25],['G5',0.25],['A5',0.5],['G5',0.25],['F5',0.25],['E5',0.5]]),
+      ...seq(24.5,[['D5',0.25],['E5',0.25],['F5',0.25],['G5',0.25],['A5',0.5],['Bb5',0.25],['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.5]]),
+      ...seq(28.2,[['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['D5',0.5],['C#5',0.25],['D5',0.25],['E5',0.25],['F5',0.25],['G5',0.5]]),
+      ...seq(31.8,[['A5',0.25],['Bb5',0.25],['A5',0.25],['G5',0.25],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.25],['D5',0.75]]),
+      ...seq(35.5,[['A5',0.25],['G5',0.25],['A5',0.25],['Bb5',0.25],['A5',0.5],['G5',0.25],['F5',0.25],['E5',0.5]]),
+      ...seq(38.5,[['F5',0.25],['G5',0.25],['A5',0.5],['G5',0.25],['F5',0.25],['E5',0.25],['D5',0.25],['C#5',0.5]]),
+      ...seq(41.6,[['D5',0.25],['E5',0.25],['F5',0.5],['G5',0.25],['A5',0.5],['Bb5',0.25],['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.5]]),
+      ...seq(45.5,[['F5',0.25],['E5',0.25],['D5',0.25],['C#5',0.25]]),
+      ...seq(47.0,[['D5',0.5],['E5',0.25],['F5',0.5],['E5',0.5],['D5',1.8]]),
+    ]),
+    voice(V.vln2, [
+      ...seq(0, [['A4',0.9]]), ...seq(1.0,[['A4',0.3]]), ...seq(1.4,[['C#5',0.9]]),
+      ...seq(2.4,[['D5',1.2]]), ...seq(3.8,[['C#5',0.3]]), ...seq(4.2,[['A4',0.9]]),
+      ...seq(5.2,[['A4',0.3]]), ...seq(5.6,[['A4',0.6]]), ...seq(6.4,[['C#5',0.9]]),
+      ...seq(7.4,[['D5',0.3]]), ...seq(7.8,[['E5',0.9]]), ...seq(8.8,[['F5',1.2]]),
+      ...seq(10.2,[['E5',0.3]]), ...seq(10.6,[['D5',0.6]]), ...seq(11.4,[['C#5',0.9]]),
+      ...seq(12.4,[['A4',1.4]]),
+      ...seq(14.0,[['F5',0.9]]), ...seq(15.0,[['F5',0.3]]), ...seq(15.4,[['E5',0.9]]),
+      ...seq(16.4,[['D5',0.6]]), ...seq(17.2,[['C#5',0.6]]), ...seq(18.0,[['A4',0.9]]),
+      ...seq(19.0,[['A4',0.3]]), ...seq(19.4,[['A4',1.4]]),
+      // Allegro - enters staggered
+      ...seq(23.0,[['A4',0.25],['Bb4',0.25],['C5',0.25],['D5',0.25],['E5',0.5],['D5',0.25],['C5',0.25],['Bb4',0.5]]),
+      ...seq(26.0,[['A4',0.25],['Bb4',0.25],['C5',0.25],['D5',0.25],['E5',0.5],['F5',0.25],['E5',0.25],['D5',0.25],['C5',0.25],['Bb4',0.5]]),
+      ...seq(29.7,[['D5',0.25],['C5',0.25],['D5',0.25],['E5',0.25],['D5',0.5],['C5',0.25],['Bb4',0.25],['A4',0.5]]),
+      ...seq(32.7,[['Bb4',0.25],['C5',0.25],['D5',0.5],['C5',0.25],['Bb4',0.25],['A4',0.75]]),
+      ...seq(35.5,[['F5',0.25],['E5',0.25],['F5',0.25],['G5',0.25],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.5]]),
+      ...seq(38.5,[['D5',0.25],['E5',0.25],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.25],['Bb4',0.25],['A4',0.5]]),
+      ...seq(41.6,[['A4',0.25],['C#5',0.25],['D5',0.5],['E5',0.25],['F5',0.5],['G5',0.25],['F5',0.25],['E5',0.25],['D5',0.25],['C#5',0.5]]),
+      ...seq(45.5,[['D5',0.25],['C#5',0.25],['A4',0.25],['A4',0.25]]),
+      ...seq(47.0,[['A4',0.5],['C#5',0.25],['D5',0.5],['C#5',0.5],['A4',1.8]]),
+    ]),
+    voice(V.vla, [
+      ...seq(0,[['F4',0.9]]), ...seq(1.4,[['A4',0.9]]), ...seq(2.4,[['A4',1.2]]),
+      ...seq(4.2,[['F4',0.9]]), ...seq(5.6,[['F4',0.6]]), ...seq(6.4,[['A4',0.9]]),
+      ...seq(7.8,[['Bb4',0.9]]), ...seq(8.8,[['C5',1.2]]),
+      ...seq(10.6,[['A4',0.6]]), ...seq(11.4,[['A4',0.9]]), ...seq(12.4,[['F4',1.4]]),
+      ...seq(14.0,[['C5',0.9]]), ...seq(15.4,[['Bb4',0.9]]),
+      ...seq(16.4,[['A4',0.6]]), ...seq(18.0,[['F4',0.9]]), ...seq(19.4,[['F4',1.4]]),
+      ...seq(24.5,[['F4',0.25],['G4',0.25],['A4',0.25],['Bb4',0.25],['C5',0.5],['Bb4',0.25],['A4',0.25],['G4',0.5]]),
+      ...seq(27.5,[['F4',0.25],['G4',0.25],['A4',0.25],['Bb4',0.25],['C5',0.5]]),
+      ...seq(30.0,[['A4',0.25],['Bb4',0.25],['A4',0.5],['G4',0.25],['F4',0.25],['E4',0.5]]),
+      ...seq(33.0,[['A4',0.5],['G4',0.25],['F4',0.25],['E4',0.25],['F4',0.75]]),
+      ...seq(35.5,[['D5',0.25],['C5',0.25],['D5',0.25],['E5',0.25],['D5',0.5],['C5',0.25],['Bb4',0.25],['A4',0.5]]),
+      ...seq(38.5,[['A4',0.25],['Bb4',0.25],['C5',0.5],['Bb4',0.25],['A4',0.25],['A4',0.25],['G4',0.25],['E4',0.5]]),
+      ...seq(41.6,[['F4',0.25],['A4',0.25],['A4',0.5],['Bb4',0.25],['C5',0.5]]),
+      ...seq(44.3,[['Bb4',0.25],['A4',0.25],['A4',0.5]]),
+      ...seq(47.0,[['F4',0.5],['A4',0.25],['A4',0.5],['A4',0.5],['F4',1.8]]),
+    ]),
+    voice(V.bass, [
+      ...bassLine([['D3',0,1.2],['A2',1.4,1.2],['D3',2.4,1.2],['A2',3.8,0.5],['D3',4.2,0.9],['A2',5.2,0.5],
+        ['D3',5.6,0.6],['A2',6.4,0.9],['D3',7.4,0.5],['G2',7.8,0.9],['F3',8.8,1.2],
+        ['C3',10.2,0.5],['D3',10.6,0.6],['A2',11.4,0.9],['D3',12.4,1.4],
+        ['D3',14.0,0.9],['G2',15.4,0.9],['A2',16.4,0.6],['A2',17.2,0.6],
+        ['D3',18.0,0.9],['A2',19.0,0.5],['D3',19.4,1.4],
+        ['D3',21.5,0.5],['C3',22.1,0.5],['Bb2',22.7,0.5],['A2',23.3,0.5],
+        ['G2',23.9,0.5],['F2',24.5,0.5],['Bb2',25.1,0.5],['C3',25.7,0.5],
+        ['D3',26.3,0.5],['Bb2',26.9,0.5],['C3',27.5,0.5],['A2',28.1,0.5],['D3',28.7,0.5],
+        ['G2',29.4,0.5],['A2',30.0,0.5],['Bb2',30.6,0.5],['C3',31.2,0.5],
+        ['D3',31.8,0.5],['Bb2',32.4,0.5],['C3',33.0,0.5],['D3',33.6,0.5],['A2',34.2,0.5],['D3',34.5,0.75],
+        ['D3',35.5,0.5],['C3',36.1,0.5],['Bb2',36.7,0.5],['A2',37.3,0.5],
+        ['G2',37.9,0.5],['F2',38.5,0.5],['E2',39.1,0.5],['A2',39.7,0.5],['D3',40.3,0.5],['A2',40.9,0.5],
+        ['D3',41.6,0.5],['A2',42.2,0.5],['G2',42.8,0.5],['F2',43.4,0.5],
+        ['Bb2',44.0,0.5],['A2',44.6,0.5],['D3',45.2,0.5],['A2',45.8,0.5],
+        ['Bb2',46.4,0.5],['D3',47.0,0.5],['A2',47.6,0.5],['D3',47.9,0.5],['A2',48.5,0.5],['D3',49.2,1.8]]),
+    ]),
+  ]
+});
+
+// --- 2. Hornpipe (Act I) ---
+purcell.movements.push({
+  title: "Act I \u2014 Hornpipe",
+  desc: "A vigorous English hornpipe with characteristic dotted rhythms and triple-time swagger",
+  voices: [
+    voice(V.vln1, seq(0, [
+      ['D5',0.3],['E5',0.15],['F5',0.3],['G5',0.15],['A5',0.45],['G5',0.15],['F5',0.3],['E5',0.15],
+      ['D5',0.3],['C#5',0.15],['D5',0.3],['E5',0.15],['F5',0.45],['E5',0.15],['D5',0.3],['C#5',0.15],
+      ['D5',0.6],['R',0.2],
+      ['A5',0.3],['Bb5',0.15],['A5',0.3],['G5',0.15],['F5',0.45],['E5',0.15],['D5',0.3],['E5',0.15],
+      ['F5',0.3],['G5',0.15],['A5',0.3],['Bb5',0.15],['A5',0.45],['G5',0.15],['F5',0.3],['E5',0.15],
+      ['D5',0.6],['R',0.2],
+      ['D5',0.3],['F5',0.15],['A5',0.3],['G5',0.15],['F5',0.45],['E5',0.15],['D5',0.3],['C#5',0.15],
+      ['D5',0.3],['E5',0.15],['F5',0.3],['G5',0.15],['A5',0.45],['Bb5',0.15],['A5',0.3],['G5',0.15],
+      ['F5',0.3],['E5',0.15],['D5',0.3],['C#5',0.15],['D5',0.9],
+    ])),
+    voice(V.vln2, seq(0, [
+      ['A4',0.3],['Bb4',0.15],['A4',0.3],['Bb4',0.15],['C5',0.45],['Bb4',0.15],['A4',0.3],['G4',0.15],
+      ['F4',0.3],['E4',0.15],['F4',0.3],['G4',0.15],['A4',0.45],['G4',0.15],['F4',0.3],['E4',0.15],
+      ['F4',0.6],['R',0.2],
+      ['F5',0.3],['G5',0.15],['F5',0.3],['E5',0.15],['D5',0.45],['C#5',0.15],['A4',0.3],['Bb4',0.15],
+      ['A4',0.3],['Bb4',0.15],['C5',0.3],['D5',0.15],['C5',0.45],['Bb4',0.15],['A4',0.3],['G4',0.15],
+      ['F4',0.6],['R',0.2],
+      ['A4',0.3],['D5',0.15],['F5',0.3],['E5',0.15],['D5',0.45],['C#5',0.15],['A4',0.3],['A4',0.15],
+      ['A4',0.3],['Bb4',0.15],['A4',0.3],['Bb4',0.15],['C5',0.45],['D5',0.15],['C5',0.3],['Bb4',0.15],
+      ['A4',0.3],['G4',0.15],['F4',0.3],['E4',0.15],['F4',0.9],
+    ])),
+    voice(V.bass, seq(0, [
+      ['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['A2',0.45],['R',0.15],['D3',0.45],['R',0.15],
+      ['Bb2',0.45],['R',0.15],['A2',0.45],['R',0.15],['D3',0.45],['R',0.15],['A2',0.45],['R',0.15],
+      ['D3',0.6],['R',0.2],
+      ['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['A2',0.45],['R',0.15],
+      ['D3',0.45],['R',0.15],['C3',0.45],['R',0.15],['F2',0.45],['R',0.15],['A2',0.45],['R',0.15],
+      ['D3',0.6],['R',0.2],
+      ['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['A2',0.45],['R',0.15],
+      ['D3',0.45],['R',0.15],['D3',0.45],['R',0.15],['A2',0.45],['R',0.15],['G2',0.45],['R',0.15],
+      ['A2',0.45],['R',0.15],['A2',0.45],['R',0.15],['D3',0.9],
+    ])),
+  ]
+});
+
+// --- 3. Air (Act II) ---
+purcell.movements.push({
+  title: "Act II \u2014 Air",
+  desc: "A graceful, lyrical air in the Baroque style with expressive melodic lines",
+  voices: [
+    voice(V.vln1, seq(0, [
+      ['A5',1.0],['G5',0.5],['F5',0.5],['E5',1.0],['D5',0.5],['C#5',0.5],
+      ['D5',1.5],['E5',0.5],['F5',1.0],['G5',0.5],['A5',0.5],
+      ['Bb5',1.0],['A5',0.5],['G5',0.5],['F5',1.0],['E5',0.5],['D5',0.5],
+      ['C#5',1.0],['D5',0.5],['E5',0.5],['D5',2.0],['R',0.5],
+      ['A5',1.0],['Bb5',0.5],['A5',0.5],['G5',1.0],['F5',0.5],['E5',0.5],
+      ['F5',1.5],['G5',0.5],['A5',1.0],['Bb5',0.5],['A5',0.5],
+      ['G5',1.0],['F5',0.5],['E5',0.5],['F5',1.0],['E5',0.5],['D5',0.5],
+      ['C#5',0.5],['D5',0.5],['E5',0.5],['C#5',0.5],['D5',2.0],
+    ])),
+    voice(V.vln2, seq(0, [
+      ['F5',1.0],['E5',0.5],['D5',0.5],['C#5',1.0],['A4',0.5],['A4',0.5],
+      ['A4',1.5],['C#5',0.5],['D5',1.0],['E5',0.5],['F5',0.5],
+      ['G5',1.0],['F5',0.5],['E5',0.5],['D5',1.0],['C#5',0.5],['A4',0.5],
+      ['A4',1.0],['A4',0.5],['C#5',0.5],['A4',2.0],['R',0.5],
+      ['F5',1.0],['G5',0.5],['F5',0.5],['E5',1.0],['D5',0.5],['C#5',0.5],
+      ['D5',1.5],['E5',0.5],['F5',1.0],['G5',0.5],['F5',0.5],
+      ['E5',1.0],['D5',0.5],['C#5',0.5],['D5',1.0],['C#5',0.5],['A4',0.5],
+      ['A4',0.5],['A4',0.5],['C#5',0.5],['A4',0.5],['A4',2.0],
+    ])),
+    voice(V.bass, seq(0, [
+      ['D3',1.0],['D3',1.0],['A2',1.0],['A2',1.0],
+      ['D3',2.0],['D3',1.0],['C3',1.0],
+      ['Bb2',1.0],['Bb2',1.0],['D3',1.0],['A2',1.0],
+      ['A2',1.0],['A2',1.0],['D3',2.0],['R',0.5],
+      ['D3',1.0],['D3',1.0],['A2',1.0],['A2',1.0],
+      ['D3',2.0],['D3',1.0],['D3',1.0],
+      ['C3',1.0],['D3',1.0],['D3',1.0],['A2',1.0],
+      ['A2',1.0],['A2',1.0],['D3',2.0],
+    ])),
+  ]
+});
+
+// --- 4. Scotch Tune (Act III) ---
+purcell.movements.push({
+  title: "Act III \u2014 Scotch Tune",
+  desc: "A lively dance in the Scottish style with snapped rhythms and modal inflections",
+  voices: [
+    voice(V.vln1, seq(0, [
+      ['A5',0.2],['G5',0.1],['A5',0.35],['F5',0.35],['D5',0.35],['F5',0.35],
+      ['A5',0.2],['G5',0.1],['A5',0.35],['D6',0.35],['C6',0.35],['A5',0.35],
+      ['Bb5',0.35],['A5',0.35],['G5',0.35],['F5',0.35],['E5',0.35],['D5',0.35],
+      ['C#5',0.2],['D5',0.1],['E5',0.35],['C#5',0.35],['D5',0.7],['R',0.3],
+      ['A5',0.2],['G5',0.1],['A5',0.35],['F5',0.35],['D5',0.35],['F5',0.35],
+      ['A5',0.2],['Bb5',0.1],['A5',0.35],['G5',0.35],['F5',0.35],['E5',0.35],
+      ['F5',0.35],['G5',0.35],['A5',0.35],['Bb5',0.35],['A5',0.35],['G5',0.35],
+      ['F5',0.2],['E5',0.1],['D5',0.35],['C#5',0.35],['D5',0.7],
+    ])),
+    voice(V.vln2, seq(0, [
+      ['F5',0.2],['E5',0.1],['F5',0.35],['D5',0.35],['A4',0.35],['D5',0.35],
+      ['F5',0.2],['E5',0.1],['F5',0.35],['A5',0.35],['A5',0.35],['F5',0.35],
+      ['G5',0.35],['F5',0.35],['E5',0.35],['D5',0.35],['C#5',0.35],['A4',0.35],
+      ['A4',0.2],['A4',0.1],['C#5',0.35],['A4',0.35],['A4',0.7],['R',0.3],
+      ['F5',0.2],['E5',0.1],['F5',0.35],['D5',0.35],['A4',0.35],['D5',0.35],
+      ['F5',0.2],['G5',0.1],['F5',0.35],['E5',0.35],['D5',0.35],['C#5',0.35],
+      ['D5',0.35],['E5',0.35],['F5',0.35],['G5',0.35],['F5',0.35],['E5',0.35],
+      ['D5',0.2],['C#5',0.1],['A4',0.35],['A4',0.35],['A4',0.7],
+    ])),
+    voice(V.bass, seq(0, [
+      ['D3',0.7],['D3',0.7],['D3',0.7],['D3',0.7],
+      ['D3',0.7],['F3',0.7],['A3',0.7],['D3',0.7],
+      ['G2',0.7],['G2',0.7],['A2',0.7],['D3',0.7],
+      ['A2',0.7],['A2',0.7],['D3',0.7],['R',0.3],
+      ['D3',0.7],['D3',0.7],['D3',0.7],['D3',0.7],
+      ['D3',0.7],['C3',0.7],['D3',0.7],['A2',0.7],
+      ['D3',0.7],['C3',0.7],['Bb2',0.7],['C3',0.7],
+      ['D3',0.7],['A2',0.7],['D3',0.7],
+    ])),
+  ]
+});
+
+// --- 5. Minuet (Act IV) ---
+purcell.movements.push({
+  title: "Act IV \u2014 Minuet",
+  desc: "An elegant triple-time dance, courtly and refined",
+  voices: [
+    voice(V.vln1, seq(0, [
+      ['D5',0.8],['E5',0.4],['F5',0.8],['G5',0.4],['A5',0.8],['Bb5',0.4],
+      ['A5',0.8],['G5',0.4],['F5',0.8],['E5',0.4],['D5',0.8],['C#5',0.4],
+      ['D5',1.2],['R',0.4],
+      ['A5',0.8],['G5',0.4],['F5',0.8],['E5',0.4],['D5',0.8],['E5',0.4],
+      ['F5',0.8],['G5',0.4],['A5',0.8],['Bb5',0.4],['A5',0.8],['G5',0.4],
+      ['F5',0.8],['E5',0.4],['D5',1.2],['R',0.4],
+      ['D5',0.4],['E5',0.4],['F5',0.4],['G5',0.8],['A5',0.4],['Bb5',0.8],['A5',0.4],
+      ['G5',0.8],['F5',0.4],['E5',0.8],['F5',0.4],['G5',0.8],['A5',0.4],
+      ['Bb5',0.8],['A5',0.4],['G5',0.8],['F5',0.4],['E5',0.4],['D5',0.4],['C#5',0.4],['D5',1.6],
+    ])),
+    voice(V.vln2, seq(0, [
+      ['A4',0.8],['C#5',0.4],['D5',0.8],['E5',0.4],['F5',0.8],['G5',0.4],
+      ['F5',0.8],['E5',0.4],['D5',0.8],['C#5',0.4],['A4',0.8],['A4',0.4],
+      ['A4',1.2],['R',0.4],
+      ['F5',0.8],['E5',0.4],['D5',0.8],['C#5',0.4],['A4',0.8],['C#5',0.4],
+      ['D5',0.8],['E5',0.4],['F5',0.8],['G5',0.4],['F5',0.8],['E5',0.4],
+      ['D5',0.8],['C#5',0.4],['A4',1.2],['R',0.4],
+      ['A4',0.4],['C#5',0.4],['D5',0.4],['E5',0.8],['F5',0.4],['G5',0.8],['F5',0.4],
+      ['E5',0.8],['D5',0.4],['C#5',0.8],['D5',0.4],['E5',0.8],['F5',0.4],
+      ['G5',0.8],['F5',0.4],['E5',0.8],['D5',0.4],['C#5',0.4],['A4',0.4],['A4',0.4],['A4',1.6],
+    ])),
+    voice(V.bass, seq(0, [
+      ['D3',1.2],['Bb2',1.2],['F3',1.2],
+      ['D3',1.2],['A2',1.2],['A2',1.2],
+      ['D3',1.2],['R',0.4],
+      ['D3',1.2],['A2',1.2],['A2',1.2],
+      ['D3',1.2],['Bb2',1.2],['F2',1.2],
+      ['A2',1.2],['D3',1.2],['R',0.4],
+      ['D3',1.2],['G2',1.2],['Bb2',1.2],
+      ['C3',1.2],['Bb2',1.2],['A2',1.2],
+      ['G2',1.2],['A2',1.2],['D3',1.6],
+    ])),
+  ]
+});
+
+// --- 6. Jig (Act V) ---
+purcell.movements.push({
+  title: "Act V \u2014 Jig",
+  desc: "A spirited concluding jig in compound time, bright and celebratory",
+  voices: [
+    voice(V.vln1, seq(0, [
+      ['D5',0.2],['E5',0.2],['F5',0.2],['A5',0.2],['G5',0.2],['F5',0.2],
+      ['E5',0.2],['F5',0.2],['G5',0.2],['A5',0.2],['Bb5',0.2],['A5',0.2],
+      ['G5',0.2],['F5',0.2],['E5',0.2],['D5',0.2],['C#5',0.2],['D5',0.2],
+      ['E5',0.4],['C#5',0.2],['D5',0.6],['R',0.2],
+      ['A5',0.2],['Bb5',0.2],['A5',0.2],['G5',0.2],['F5',0.2],['E5',0.2],
+      ['F5',0.2],['G5',0.2],['A5',0.2],['Bb5',0.2],['A5',0.2],['G5',0.2],
+      ['F5',0.2],['E5',0.2],['D5',0.2],['E5',0.2],['F5',0.2],['G5',0.2],
+      ['A5',0.4],['G5',0.2],['F5',0.2],['E5',0.2],['D5',0.2],
+      ['C#5',0.2],['D5',0.2],['E5',0.2],['F5',0.4],['E5',0.2],
+      ['D5',0.2],['C#5',0.2],['D5',0.2],['E5',0.2],['C#5',0.2],['D5',0.2],
+      ['D5',0.8],
+    ])),
+    voice(V.vln2, seq(0, [
+      ['A4',0.2],['Bb4',0.2],['A4',0.2],['F5',0.2],['E5',0.2],['D5',0.2],
+      ['C#5',0.2],['D5',0.2],['E5',0.2],['F5',0.2],['G5',0.2],['F5',0.2],
+      ['E5',0.2],['D5',0.2],['C#5',0.2],['A4',0.2],['A4',0.2],['A4',0.2],
+      ['C#5',0.4],['A4',0.2],['A4',0.6],['R',0.2],
+      ['F5',0.2],['G5',0.2],['F5',0.2],['E5',0.2],['D5',0.2],['C#5',0.2],
+      ['D5',0.2],['E5',0.2],['F5',0.2],['G5',0.2],['F5',0.2],['E5',0.2],
+      ['D5',0.2],['C#5',0.2],['A4',0.2],['C#5',0.2],['D5',0.2],['E5',0.2],
+      ['F5',0.4],['E5',0.2],['D5',0.2],['C#5',0.2],['A4',0.2],
+      ['A4',0.2],['A4',0.2],['C#5',0.2],['D5',0.4],['C#5',0.2],
+      ['A4',0.2],['A4',0.2],['A4',0.2],['C#5',0.2],['A4',0.2],['A4',0.2],
+      ['A4',0.8],
+    ])),
+    voice(V.bass, seq(0, [
+      ['D3',0.6],['D3',0.6],['A2',0.6],['F3',0.6],
+      ['C3',0.6],['D3',0.6],['A2',0.6],['D3',0.6],['R',0.2],
+      ['D3',0.6],['A2',0.6],['D3',0.6],['Bb2',0.6],
+      ['D3',0.6],['G2',0.6],['A2',0.6],
+      ['D3',0.6],['D3',0.6],
+      ['A2',0.6],['A2',0.6],['D3',0.8],
+    ])),
+  ]
+});
+
+// --- 7. Chaconne ---
+purcell.movements.push({
+  title: "Chaconne",
+  desc: "A ground bass chaconne \u2014 variations over a repeating bass pattern, Purcell's specialty",
+  voices: (() => {
+    // 4-bar ground bass in D minor, repeated with increasingly elaborate upper parts
+    const groundBass = [['D3',0,1.5],['A2',1.5,1.5],['Bb2',3.0,1.5],['F2',4.5,0.75],['G2',5.25,0.75],['A2',6.0,1.5],['D3',7.5,1.5]];
+    const period = 9.0;
+    const bassNotes = [];
+    for (let rep = 0; rep < 5; rep++) {
+      const off = rep * period;
+      for (const b of groundBass) bassNotes.push(n(b[0], b[1]+off, b[2]));
+    }
+
+    // Variation melodies over each repetition
+    const mel = [
+      // Var 1: Simple
+      ...seq(0, [['D5',1.0],['C#5',0.5],['D5',0.5],['E5',0.5],['F5',1.0],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',1.0],['E5',0.5],['F5',0.5],['E5',0.5],['D5',1.5]]),
+      // Var 2: More motion
+      ...seq(9, [['A5',0.5],['G5',0.25],['F5',0.25],['E5',0.5],['D5',0.25],['E5',0.25],['F5',0.5],['G5',0.5],['A5',0.5],['Bb5',0.5],['A5',0.25],['G5',0.25],
+        ['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.5],['D5',0.25],['E5',0.25],['F5',0.5],['E5',0.5],['D5',1.5]]),
+      // Var 3: Decorated
+      ...seq(18, [['D5',0.25],['E5',0.25],['F5',0.25],['G5',0.25],['A5',0.5],['Bb5',0.25],['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['F5',0.25],
+        ['G5',0.5],['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['D5',0.25],['C#5',0.25],['D5',0.5],['E5',0.25],['F5',0.25],['G5',0.25],['A5',0.25],
+        ['Bb5',0.5],['A5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['D5',1.0]]),
+      // Var 4: Syncopated
+      ...seq(27, [['R',0.25],['A5',0.75],['G5',0.5],['R',0.25],['F5',0.75],['E5',0.5],['R',0.25],['F5',0.75],['G5',0.5],['A5',0.5],
+        ['R',0.25],['Bb5',0.75],['A5',0.5],['G5',0.25],['F5',0.25],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',1.5]]),
+      // Var 5: Grand conclusion
+      ...seq(36, [['D5',0.5],['F5',0.5],['A5',0.5],['D6',1.0],['C6',0.5],['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',0.5],
+        ['E5',0.5],['F5',0.5],['G5',0.5],['A5',0.5],['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',2.0]]),
+    ];
+
+    const mel2 = [
+      ...seq(0, [['A4',1.5],['A4',1.5],['D5',1.5],['C#5',0.75],['Bb4',0.75],['A4',1.5],['A4',1.5]]),
+      ...seq(9, [['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',0.5],['E5',0.5],['D5',0.5],['C5',0.5],['D5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],
+        ['D5',0.5],['C#5',0.5],['Bb4',0.5],['A4',0.5],['A4',1.5]]),
+      ...seq(18, [['A4',0.25],['Bb4',0.25],['C5',0.25],['D5',0.25],['E5',0.5],['F5',0.25],['E5',0.25],['D5',0.5],['C5',0.25],['D5',0.25],
+        ['Bb4',0.5],['C5',0.25],['Bb4',0.25],['A4',0.5],['G4',0.25],['A4',0.25],['Bb4',0.5],['A4',0.25],['G4',0.25],
+        ['F4',0.5],['G4',0.25],['A4',0.25],['Bb4',0.5],['A4',0.5],['A4',1.0]]),
+      ...seq(27, [['R',0.25],['F5',0.75],['E5',0.5],['R',0.25],['D5',0.75],['C#5',0.5],['R',0.25],['D5',0.75],['E5',0.5],['F5',0.5],
+        ['R',0.25],['G5',0.75],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.5],['A4',0.5],['A4',0.5],['A4',1.5]]),
+      ...seq(36, [['A4',0.5],['D5',0.5],['F5',0.5],['A5',1.0],['G5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C5',0.5],
+        ['Bb4',0.5],['A4',0.5],['Bb4',0.5],['C5',0.5],['D5',0.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['A4',0.5],['A4',2.0]]),
+    ];
+
+    return [
+      voice(V.vln1, mel),
+      voice(V.vln2, mel2),
+      voice(V.bass, bassNotes),
+    ];
+  })()
+});
+
+
+// ════════════════════════════════════════════════════════════════════
+//  MOZART: REQUIEM MASS IN D MINOR  (K. 626)
+// ════════════════════════════════════════════════════════════════════
+
+const mozart = {
+  title: "Requiem Mass in D minor, K. 626",
+  subtitle: "Wolfgang Amadeus Mozart (1791) \u2014 His final, unfinished masterwork",
+  movements: []
+};
+
+// --- 1. Introitus: Requiem aeternam ---
+mozart.movements.push({
+  title: "I. Introitus: Requiem aeternam",
+  desc: "Solemn D minor opening with pulsing strings and the choir's plea for eternal rest",
+  voices: [
+    voice(V.sop, [
+      ...seq(0, [['D5',2.0],['C#5',0.8],['D5',1.5],['E5',1.0],['F5',2.0],['E5',0.8],['D5',1.5]]),
+      ...seq(12, [['D5',1.5],['D5',0.8],['E5',0.8],['F5',1.5],['E5',0.8],['D5',1.5],['C#5',0.8],['D5',2.0]]),
+      ...seq(24, [['A5',1.0],['A5',0.6],['G5',0.6],['F5',1.2],['E5',0.6],['F5',0.6],['E5',0.6],['D5',2.0]]),
+      ...seq(33.5,[['D5',1.2],['E5',0.8],['F5',1.2],['G5',0.8],['A5',1.5],['Bb5',1.0],['A5',0.8],['G5',0.8],['F5',1.2],['E5',0.8],['D5',2.0]]),
+      ...seq(48.5,[['F5',1.0],['E5',1.0],['D5',1.5],['C#5',0.8],['D5',3.0]]),
+      ...seq(57.5,[['D5',1.5],['E5',1.0],['F5',1.5],['E5',0.8],['D5',2.0]]),
+    ]),
+    voice(V.alto, [
+      ...seq(0, [['A4',2.0],['A4',0.8],['A4',1.5],['Bb4',1.0],['A4',2.0],['G4',0.8],['F4',1.5]]),
+      ...seq(12, [['A4',1.5],['A4',0.8],['Bb4',0.8],['A4',1.5],['G4',0.8],['F4',1.5],['E4',0.8],['F4',2.0]]),
+      ...seq(24, [['F5',1.0],['E5',0.6],['E5',0.6],['D5',1.2],['C#5',0.6],['D5',0.6],['C#5',0.6],['A4',2.0]]),
+      ...seq(33.5,[['A4',1.2],['Bb4',0.8],['C5',1.2],['D5',0.8],['C5',1.5],['D5',1.0],['C5',0.8],['Bb4',0.8],['A4',1.2],['G4',0.8],['F4',2.0]]),
+      ...seq(48.5,[['A4',1.0],['A4',1.0],['Bb4',1.5],['A4',0.8],['A4',3.0]]),
+      ...seq(57.5,[['A4',1.5],['Bb4',1.0],['A4',1.5],['G4',0.8],['F4',2.0]]),
+    ]),
+    voice(V.tenor, [
+      ...seq(0, [['F4',2.0],['E4',0.8],['F4',1.5],['G4',1.0],['F4',2.0],['E4',0.8],['D4',1.5]]),
+      ...seq(12, [['F4',1.5],['F4',0.8],['G4',0.8],['F4',1.5],['E4',0.8],['D4',1.5],['A3',0.8],['D4',2.0]]),
+      ...seq(24, [['D4',1.0],['C#4',0.6],['C#4',0.6],['D4',1.2],['A3',0.6],['A3',0.6],['A3',0.6],['F4',2.0]]),
+      ...seq(33.5,[['F4',1.2],['G4',0.8],['A4',1.2],['Bb4',0.8],['A4',1.5],['G4',1.0],['F4',0.8],['E4',0.8],['D4',1.2],['C#4',0.8],['D4',2.0]]),
+      ...seq(48.5,[['D4',1.0],['C#4',1.0],['D4',1.5],['E4',0.8],['F4',3.0]]),
+      ...seq(57.5,[['F4',1.5],['G4',1.0],['F4',1.5],['E4',0.8],['D4',2.0]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',2.0],['A2',0.8],['D3',1.5],['C3',1.0],['D3',2.0],['A2',0.8],['Bb2',1.5]]),
+      ...seq(12, [['D3',1.5],['D3',0.8],['C3',0.8],['D3',1.5],['A2',0.8],['Bb2',1.5],['A2',0.8],['D3',2.0]]),
+      ...seq(24, [['D3',1.0],['A2',0.6],['A2',0.6],['D3',1.2],['A2',0.6],['D3',0.6],['A2',0.6],['D3',2.0]]),
+      ...seq(33.5,[['D3',1.2],['C3',0.8],['F2',1.2],['G2',0.8],['A2',1.5],['Bb2',1.0],['F2',0.8],['G2',0.8],['D3',1.2],['A2',0.8],['D3',2.0]]),
+      ...seq(48.5,[['D3',1.0],['A2',1.0],['Bb2',1.5],['A2',0.8],['D3',3.0]]),
+      ...seq(57.5,[['D3',1.5],['C3',1.0],['D3',1.5],['A2',0.8],['D3',2.0]]),
+    ]),
+    voice(V.strPulse, pulse([
+      {ch:['D4','F4','A4'],t:0,dur:11},{ch:['A3','C#4','E4'],t:11,dur:1},
+      {ch:['D4','F4','A4'],t:12,dur:4},{ch:['Bb3','D4','F4'],t:16,dur:2},
+      {ch:['A3','C#4','E4'],t:18,dur:3},{ch:['D4','F4','A4'],t:21,dur:3},
+      {ch:['A3','C#4','E4'],t:24,dur:3},{ch:['D4','F4','A4'],t:27,dur:3.5},
+      {ch:['A3','C#4','E4'],t:30.5,dur:3},{ch:['D4','F4','A4'],t:33.5,dur:3},
+      {ch:['F4','A4','C5'],t:36.5,dur:2},{ch:['G3','Bb3','D4'],t:38.5,dur:2},
+      {ch:['Bb3','D4','F4'],t:40.5,dur:2},{ch:['A3','C#4','E4'],t:42.5,dur:3.5},
+      {ch:['D4','F4','A4'],t:46,dur:2.5},{ch:['A3','C#4','E4'],t:48.5,dur:2.5},
+      {ch:['Bb3','D4','F4'],t:51,dur:2.5},{ch:['A3','C#4','E4'],t:53.5,dur:1},
+      {ch:['D4','F4','A4'],t:54.5,dur:3},{ch:['D4','F4','A4'],t:57.5,dur:3},
+      {ch:['A3','C#4','E4'],t:60.5,dur:2},{ch:['D4','F4','A4'],t:62.5,dur:2.5},
+    ], 0.35, 0.15)),
+  ]
+});
+
+// --- 2. Kyrie ---
+mozart.movements.push({
+  title: "II. Kyrie eleison",
+  desc: "A powerful double fugue: voices enter one by one with 'Kyrie eleison' in urgent counterpoint",
+  voices: [
+    voice(V.sop, [
+      // Subject entries, staggered
+      ...seq(4, [['D5',0.4],['E5',0.4],['F5',0.4],['G5',0.4],['A5',0.8],['Bb5',0.4],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.8]]),
+      ...seq(9, [['F5',0.4],['G5',0.4],['A5',0.4],['Bb5',0.4],['A5',0.8],['G5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['C#5',0.8]]),
+      ...seq(14,[['D5',0.4],['F5',0.4],['A5',0.4],['G5',0.4],['F5',0.8],['E5',0.4],['D5',0.4]]),
+      ...seq(17.5,[['E5',0.4],['F5',0.4],['G5',0.4],['A5',0.4],['Bb5',0.8],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.8]]),
+      ...seq(22,[['D5',0.4],['E5',0.4],['F5',0.4],['G5',0.8],['A5',0.4],['Bb5',0.4],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.4],['D5',0.4]]),
+      ...seq(27,[['C#5',0.4],['D5',0.4],['E5',0.8],['F5',0.4],['E5',0.4],['D5',1.6]]),
+    ]),
+    voice(V.alto, [
+      // Second entry
+      ...seq(6, [['A4',0.4],['Bb4',0.4],['C5',0.4],['D5',0.4],['E5',0.8],['F5',0.4],['E5',0.4],['D5',0.4],['C5',0.4],['Bb4',0.8]]),
+      ...seq(11,[['C5',0.4],['D5',0.4],['E5',0.4],['F5',0.4],['E5',0.8],['D5',0.4],['C5',0.4],['Bb4',0.4],['A4',0.4],['A4',0.8]]),
+      ...seq(16,[['A4',0.4],['C5',0.4],['E5',0.4],['D5',0.4],['C5',0.8]]),
+      ...seq(19,[['Bb4',0.4],['C5',0.4],['D5',0.4],['E5',0.4],['F5',0.8],['E5',0.4],['D5',0.4],['C5',0.4],['Bb4',0.8]]),
+      ...seq(24,[['A4',0.4],['Bb4',0.4],['C5',0.4],['D5',0.8],['E5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['C5',0.4],['Bb4',0.4],['A4',0.4]]),
+      ...seq(29,[['A4',0.4],['A4',0.4],['Bb4',0.8],['A4',0.4],['A4',0.4],['A4',1.6]]),
+    ]),
+    voice(V.tenor, [
+      ...seq(8, [['F4',0.4],['G4',0.4],['A4',0.4],['Bb4',0.4],['A4',0.8],['G4',0.4],['F4',0.4],['E4',0.4],['D4',0.4]]),
+      ...seq(13,[['E4',0.8],['F4',0.4],['G4',0.4],['A4',0.4],['G4',0.8],['F4',0.4],['E4',0.4],['D4',0.8]]),
+      ...seq(18,[['D4',0.4],['F4',0.4],['A4',0.4],['G4',0.4],['F4',0.8]]),
+      ...seq(21,[['E4',0.4],['F4',0.4],['G4',0.4],['A4',0.4],['G4',0.8],['F4',0.4],['E4',0.4]]),
+      ...seq(25,[['D4',0.4],['E4',0.4],['F4',0.4],['G4',0.8],['F4',0.4],['E4',0.4],['D4',0.4],['C#4',0.4],['D4',0.4]]),
+      ...seq(29.5,[['E4',0.8],['E4',0.4],['D4',0.4],['C#4',0.4],['D4',1.6]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',0.4],['E3',0.4],['F3',0.4],['G3',0.4],['A3',0.8],['Bb3',0.4],['A3',0.4],['G3',0.4],['F3',0.4],['E3',0.8]]),
+      ...seq(5, [['D3',0.8],['C3',0.4],['Bb2',0.4],['A2',0.8]]),
+      ...seq(8, [['D3',0.4],['C3',0.4],['Bb2',0.4],['A2',0.4],['G2',0.8],['F2',0.4],['G2',0.4],['A2',0.8]]),
+      ...seq(12,[['D3',0.8],['C3',0.4],['Bb2',0.4],['A2',0.8],['G2',0.4],['A2',0.4]]),
+      ...seq(16,[['D3',0.8],['A2',0.8],['D3',0.8],['G2',0.8]]),
+      ...seq(20,[['A2',0.8],['Bb2',0.8],['C3',0.8],['D3',0.8]]),
+      ...seq(24,[['G2',0.8],['A2',0.8],['Bb2',0.8],['A2',0.8]]),
+      ...seq(28,[['D3',0.8],['A2',0.8],['Bb2',0.8],['A2',0.8],['D3',1.6]]),
+    ]),
+  ]
+});
+
+// --- 3. Dies Irae ---
+mozart.movements.push({
+  title: "III. Sequentia: Dies irae",
+  desc: "The terrifying Day of Wrath \u2014 furious choral declamation with thundering timpani",
+  voices: [
+    voice(V.sop, [
+      ...seq(0, [['D5',0.25],['D5',0.25],['D5',0.25],['D5',0.25],['F5',0.5],['D5',0.5],
+        ['A5',0.25],['A5',0.25],['A5',0.25],['A5',0.25],['Bb5',0.5],['A5',0.5]]),
+      ...seq(3, [['G5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.5],['D5',0.5]]),
+      ...seq(5.5,[['D5',0.25],['D5',0.25],['D5',0.25],['D5',0.25],['F5',0.5],['D5',0.5],
+        ['A5',0.25],['A5',0.25],['A5',0.25],['A5',0.25],['Bb5',0.5],['A5',0.5]]),
+      ...seq(8.5,[['G5',0.25],['G5',0.25],['F5',0.25],['E5',0.25],['F5',0.5],['E5',0.25],['D5',0.25],['C#5',0.5],['D5',1.0]]),
+      // Second phrase
+      ...seq(11.5,[['A5',0.5],['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5]]),
+      ...seq(15.5,[['D5',0.5],['E5',0.5],['F5',0.5],['G5',0.5],['A5',1.0],['D5',1.0]]),
+      ...seq(19.5,[['A5',0.25],['A5',0.25],['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',1.0]]),
+    ]),
+    voice(V.alto, [
+      ...seq(0, [['A4',0.25],['A4',0.25],['A4',0.25],['A4',0.25],['D5',0.5],['A4',0.5],
+        ['F5',0.25],['F5',0.25],['F5',0.25],['F5',0.25],['G5',0.5],['F5',0.5]]),
+      ...seq(3, [['E5',0.25],['E5',0.25],['D5',0.25],['C#5',0.25],['D5',0.5],['C#5',0.25],['A4',0.25],['A4',0.5],['A4',0.5]]),
+      ...seq(5.5,[['A4',0.25],['A4',0.25],['A4',0.25],['A4',0.25],['D5',0.5],['A4',0.5],
+        ['F5',0.25],['F5',0.25],['F5',0.25],['F5',0.25],['G5',0.5],['F5',0.5]]),
+      ...seq(8.5,[['E5',0.25],['E5',0.25],['D5',0.25],['C#5',0.25],['D5',0.5],['C#5',0.25],['A4',0.25],['A4',0.5],['A4',1.0]]),
+      ...seq(11.5,[['F5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],['A4',0.5],['A4',0.5]]),
+      ...seq(15.5,[['A4',0.5],['Bb4',0.5],['A4',0.5],['Bb4',0.5],['C5',1.0],['A4',1.0]]),
+      ...seq(19.5,[['F5',0.25],['F5',0.25],['G5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],['A4',1.0]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5]]),
+      ...seq(3, [['A2',0.5],['A2',0.5],['D3',0.5],['A2',0.5],['A2',0.5],['D3',0.5]]),
+      ...seq(5.5,[['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5],['D3',0.5]]),
+      ...seq(8.5,[['A2',0.5],['A2',0.5],['D3',0.5],['A2',0.5],['D3',1.0]]),
+      ...seq(11.5,[['D3',0.5],['G2',0.5],['A2',0.5],['A2',0.5],['D3',0.5],['A2',0.5],['D3',0.5],['A2',0.5]]),
+      ...seq(15.5,[['D3',0.5],['C3',0.5],['F2',0.5],['G2',0.5],['A2',1.0],['D3',1.0]]),
+      ...seq(19.5,[['D3',0.5],['G2',0.5],['D3',0.5],['A2',0.5],['D3',0.5],['A2',0.5],['D3',1.0]]),
+    ]),
+    voice(V.timp, [
+      n('D2',0,0.15), n('D2',0.5,0.15), n('D2',1.0,0.15), n('D2',1.5,0.15),
+      n('D2',2.0,0.15), n('D2',2.5,0.15),
+      n('D2',5.5,0.15), n('D2',6.0,0.15), n('D2',6.5,0.15), n('D2',7.0,0.15),
+      n('D2',7.5,0.15), n('D2',8.0,0.15),
+      n('D2',11.5,0.15), n('D2',12.0,0.15), n('D2',15.5,0.15), n('D2',16.0,0.15),
+      n('D2',19.5,0.15), n('D2',20.0,0.15), n('D2',20.5,0.15),
+    ]),
+  ]
+});
+
+// --- 4. Tuba Mirum ---
+mozart.movements.push({
+  title: "IV. Tuba mirum",
+  desc: "The wondrous trumpet sounds \u2014 solo trombone call, then each voice enters in turn",
+  voices: [
+    // Trombone solo opening
+    voice(V.horn, [
+      ...seq(0, [['Bb3',1.5],['A3',0.5],['Bb3',0.5],['C4',0.5],['D4',1.5],['Eb4',0.5],['D4',0.5],['C4',0.5],
+        ['Bb3',1.0],['A3',0.5],['G3',0.5],['A3',2.0]]),
+      ...seq(8, [['Bb3',1.0],['C4',0.5],['D4',0.5],['Eb4',1.5],['D4',0.5],['C4',1.0],['Bb3',0.5],['A3',0.5],['Bb3',2.0]]),
+    ]),
+    // Bass solo
+    voice(V.bsn, [
+      ...seq(15, [['Bb2',1.5],['C3',0.5],['D3',1.0],['Eb3',0.5],['D3',0.5],['C3',1.5],['Bb2',0.5],['A2',2.0]]),
+      ...seq(22, [['G2',1.0],['A2',0.5],['Bb2',0.5],['C3',1.0],['D3',0.5],['C3',0.5],['Bb2',2.0]]),
+    ]),
+    // Tenor entry
+    voice(V.tenor, [
+      ...seq(22, [['F4',1.5],['Eb4',0.5],['D4',1.0],['C4',0.5],['D4',0.5],['Eb4',1.5],['D4',0.5],['C4',2.0]]),
+      ...seq(29, [['Bb3',1.0],['C4',0.5],['D4',0.5],['Eb4',1.0],['D4',0.5],['C4',0.5],['Bb3',2.0]]),
+    ]),
+    // Alto entry
+    voice(V.alto, [
+      ...seq(29, [['D5',1.5],['C5',0.5],['Bb4',1.0],['A4',0.5],['Bb4',0.5],['C5',1.5],['Bb4',0.5],['A4',2.0]]),
+      ...seq(36, [['G4',1.0],['A4',0.5],['Bb4',0.5],['C5',1.0],['Bb4',0.5],['A4',0.5],['Bb4',2.0]]),
+    ]),
+    // Soprano entry
+    voice(V.sop, [
+      ...seq(36, [['F5',1.5],['Eb5',0.5],['D5',1.0],['C5',0.5],['D5',0.5],['Eb5',1.5],['D5',0.5],['C5',2.0]]),
+      ...seq(43, [['Bb4',1.0],['C5',0.5],['D5',0.5],['Eb5',1.0],['D5',0.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['Bb4',2.0]]),
+    ]),
+  ]
+});
+
+// --- 5. Rex Tremendae ---
+mozart.movements.push({
+  title: "V. Rex tremendae",
+  desc: "King of tremendous majesty \u2014 thunderous choral blocks alternate with pleading 'salva me'",
+  voices: [
+    voice(V.sop, [
+      // "Rex" - powerful block chords
+      ...seq(0, [['D5',0.8],['R',0.2],['D5',0.8],['R',0.2],['D5',1.5]]),
+      ...seq(3.5,[['F5',0.8],['R',0.2],['F5',0.8],['R',0.2],['E5',1.5]]),
+      // "salva me" - pleading
+      ...seq(7, [['A5',1.5],['G5',0.5],['F5',0.5],['E5',0.5],['F5',0.5],['E5',0.5],['D5',2.0]]),
+      // Second "Rex"
+      ...seq(12,[['D5',0.8],['R',0.2],['D5',0.8],['R',0.2],['E5',1.5]]),
+      ...seq(15.5,[['F5',0.8],['R',0.2],['G5',0.8],['R',0.2],['A5',1.5]]),
+      // "salva me" again, more intense
+      ...seq(19,[['Bb5',1.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',2.5]]),
+    ]),
+    voice(V.alto, [
+      ...seq(0, [['A4',0.8],['R',0.2],['A4',0.8],['R',0.2],['A4',1.5]]),
+      ...seq(3.5,[['D5',0.8],['R',0.2],['D5',0.8],['R',0.2],['C#5',1.5]]),
+      ...seq(7, [['F5',1.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',0.5],['C#5',0.5],['A4',2.0]]),
+      ...seq(12,[['A4',0.8],['R',0.2],['A4',0.8],['R',0.2],['Bb4',1.5]]),
+      ...seq(15.5,[['A4',0.8],['R',0.2],['Bb4',0.8],['R',0.2],['C5',1.5]]),
+      ...seq(19,[['D5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['G4',0.5],['A4',0.5],['A4',0.5],['A4',2.5]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',0.8],['R',0.2],['D3',0.8],['R',0.2],['D3',1.5]]),
+      ...seq(3.5,[['D3',0.8],['R',0.2],['D3',0.8],['R',0.2],['A2',1.5]]),
+      ...seq(7, [['D3',1.0],['A2',1.0],['D3',1.0],['A2',1.0],['D3',2.0]]),
+      ...seq(12,[['D3',0.8],['R',0.2],['D3',0.8],['R',0.2],['C3',1.5]]),
+      ...seq(15.5,[['F2',0.8],['R',0.2],['G2',0.8],['R',0.2],['A2',1.5]]),
+      ...seq(19,[['Bb2',1.0],['A2',1.0],['D3',1.0],['A2',1.0],['D3',2.5]]),
+    ]),
+    voice(V.timp, [
+      n('D2',0,0.2),n('D2',1.0,0.2),n('D2',2.0,0.2),
+      n('D2',3.5,0.2),n('D2',4.5,0.2),n('D2',5.5,0.2),
+      n('D2',12,0.2),n('D2',13,0.2),n('D2',14,0.2),
+      n('D2',15.5,0.2),n('D2',16.5,0.2),n('D2',17.5,0.2),
+    ]),
+  ]
+});
+
+// --- 6. Recordare ---
+mozart.movements.push({
+  title: "VI. Recordare",
+  desc: "Remember, merciful Jesus \u2014 a tender, lyrical quartet in F major, the Requiem's moment of warmth",
+  voices: [
+    voice(V.sop, seq(0, [
+      ['F5',1.5],['E5',0.5],['D5',0.5],['C5',0.5],['F5',1.5],['G5',0.5],['A5',1.5],
+      ['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',1.0],['E5',0.5],['F5',2.0],['R',0.5],
+      ['C5',1.0],['D5',0.5],['E5',0.5],['F5',1.5],['G5',0.5],['A5',1.0],
+      ['Bb5',0.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['F5',2.0],['R',0.5],
+      ['A5',1.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',1.0],['C5',0.5],['D5',0.5],
+      ['E5',1.5],['F5',0.5],['G5',1.0],['F5',0.5],['E5',0.5],['F5',2.0],
+    ])),
+    voice(V.alto, seq(0, [
+      ['C5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['C5',1.5],['E5',0.5],['F5',1.5],
+      ['F5',0.5],['E5',0.5],['D5',0.5],['C5',1.0],['C5',0.5],['C5',2.0],['R',0.5],
+      ['A4',1.0],['Bb4',0.5],['C5',0.5],['C5',1.5],['E5',0.5],['F5',1.0],
+      ['F5',0.5],['E5',0.5],['D5',0.5],['C5',0.5],['C5',0.5],['C5',2.0],['R',0.5],
+      ['F5',1.5],['E5',0.5],['D5',0.5],['C5',0.5],['Bb4',1.0],['A4',0.5],['Bb4',0.5],
+      ['C5',1.5],['C5',0.5],['E5',1.0],['C5',0.5],['C5',0.5],['C5',2.0],
+    ])),
+    voice(V.tenor, seq(0, [
+      ['A4',1.5],['G4',0.5],['F4',0.5],['F4',0.5],['A4',1.5],['C5',0.5],['C5',1.5],
+      ['D5',0.5],['C5',0.5],['Bb4',0.5],['A4',1.0],['G4',0.5],['A4',2.0],['R',0.5],
+      ['F4',1.0],['F4',0.5],['G4',0.5],['A4',1.5],['C5',0.5],['C5',1.0],
+      ['D5',0.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['G4',0.5],['A4',2.0],['R',0.5],
+      ['C5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['G4',1.0],['F4',0.5],['G4',0.5],
+      ['G4',1.5],['A4',0.5],['C5',1.0],['A4',0.5],['G4',0.5],['A4',2.0],
+    ])),
+    voice(V.bsn, seq(0, [
+      ['F2',2.0],['F2',1.0],['F2',2.0],['C3',1.0],['F3',1.5],
+      ['Bb2',1.0],['C3',1.0],['F2',1.5],['C3',0.5],['F3',2.0],['R',0.5],
+      ['F2',1.5],['Bb2',1.0],['F2',2.0],['C3',1.0],['F3',1.0],
+      ['Bb2',1.0],['C3',1.0],['F2',1.5],['C3',0.5],['F3',2.0],['R',0.5],
+      ['F3',2.0],['Bb2',1.0],['C3',1.5],['F2',1.0],
+      ['C3',2.0],['Bb2',1.0],['C3',1.5],['F3',2.0],
+    ])),
+  ]
+});
+
+// --- 7. Confutatis ---
+mozart.movements.push({
+  title: "VII. Confutatis",
+  desc: "The damned are silenced \u2014 fierce male voices answered by gentle female pleading 'voca me'",
+  voices: [
+    // Fierce male voices (low, aggressive)
+    voice(V.tenor, [
+      ...seq(0, [['A3',0.2],['A3',0.2],['A3',0.2],['A3',0.2],['Bb3',0.4],['A3',0.2],['A3',0.2],['G3',0.2],['A3',0.2],['Bb3',0.4],['A3',0.6]]),
+      ...seq(3, [['A3',0.2],['A3',0.2],['A3',0.2],['A3',0.2],['C4',0.4],['Bb3',0.2],['A3',0.2],['G3',0.2],['F3',0.2],['E3',0.4],['D3',0.6]]),
+      ...seq(10,[['A3',0.2],['A3',0.2],['A3',0.2],['A3',0.2],['Bb3',0.4],['A3',0.2],['A3',0.2],['G3',0.2],['A3',0.2],['Bb3',0.4],['A3',0.6]]),
+      ...seq(13,[['A3',0.2],['A3',0.2],['A3',0.2],['A3',0.2],['C4',0.4],['Bb3',0.2],['A3',0.2],['G3',0.2],['F3',0.2],['E3',0.4],['D3',0.6]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',0.2],['D3',0.2],['D3',0.2],['D3',0.2],['G2',0.4],['D3',0.2],['D3',0.2],['C3',0.2],['D3',0.2],['G2',0.4],['D3',0.6]]),
+      ...seq(3, [['D3',0.2],['D3',0.2],['D3',0.2],['D3',0.2],['A2',0.4],['G2',0.2],['F2',0.2],['E2',0.2],['D2',0.2],['A2',0.4],['D3',0.6]]),
+      ...seq(10,[['D3',0.2],['D3',0.2],['D3',0.2],['D3',0.2],['G2',0.4],['D3',0.6]]),
+      ...seq(13,[['D3',0.2],['D3',0.2],['D3',0.2],['D3',0.2],['A2',0.4],['D3',0.6]]),
+    ]),
+    // Gentle female "voca me"
+    voice(V.sop, [
+      ...seq(6, [['F5',1.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',1.5]]),
+      ...seq(16,[['F5',1.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',1.5]]),
+      // Final plea
+      ...seq(20,[['A5',1.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',1.0],['C#5',0.5],['D5',2.5]]),
+    ]),
+    voice(V.alto, [
+      ...seq(6, [['A4',1.5],['G4',0.5],['F4',0.5],['E4',0.5],['F4',1.5]]),
+      ...seq(16,[['A4',1.5],['G4',0.5],['F4',0.5],['E4',0.5],['F4',1.5]]),
+      ...seq(20,[['F5',1.5],['E5',0.5],['D5',0.5],['C#5',0.5],['A4',1.0],['A4',0.5],['A4',2.5]]),
+    ]),
+  ]
+});
+
+// --- 8. Lacrimosa ---
+mozart.movements.push({
+  title: "VIII. Lacrimosa",
+  desc: "Day of weeping \u2014 Mozart's last completed passage. Rising sighing figures in devastating 12/8 time",
+  voices: [
+    voice(V.sop, seq(0, [
+      ['D5',1.0],['C#5',0.5],['D5',1.5],['E5',0.5],['F5',0.5],
+      ['E5',1.0],['D5',0.5],['E5',1.5],['F5',0.5],['G5',0.5],
+      ['F5',1.0],['E5',0.5],['F5',1.5],['G5',0.5],['A5',0.5],
+      ['Bb5',1.5],['A5',0.5],['G5',0.5],['F5',0.5],['E5',0.5],['D5',2.0],['R',0.5],
+      ['D5',1.0],['Eb5',0.5],['D5',1.5],['C5',0.5],['Bb4',0.5],
+      ['A4',1.0],['Bb4',0.5],['C5',1.5],['D5',0.5],['Eb5',0.5],
+      ['D5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['G4',0.5],
+      ['A4',1.0],['Bb4',0.5],['A4',1.5],['G4',0.5],['A4',2.5],
+    ])),
+    voice(V.alto, seq(0, [
+      ['A4',1.0],['A4',0.5],['A4',1.5],['Bb4',0.5],['A4',0.5],
+      ['G4',1.0],['G4',0.5],['Bb4',1.5],['A4',0.5],['Bb4',0.5],
+      ['A4',1.0],['G4',0.5],['A4',1.5],['Bb4',0.5],['C5',0.5],
+      ['D5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['G4',0.5],['F4',2.0],['R',0.5],
+      ['Bb4',1.0],['Bb4',0.5],['Bb4',1.5],['A4',0.5],['G4',0.5],
+      ['F4',1.0],['G4',0.5],['A4',1.5],['Bb4',0.5],['C5',0.5],
+      ['Bb4',1.5],['A4',0.5],['G4',0.5],['F4',0.5],['Eb4',0.5],
+      ['F4',1.0],['G4',0.5],['F4',1.5],['E4',0.5],['F4',2.5],
+    ])),
+    voice(V.tenor, seq(0, [
+      ['F4',1.0],['E4',0.5],['F4',1.5],['G4',0.5],['F4',0.5],
+      ['E4',1.0],['D4',0.5],['G4',1.5],['F4',0.5],['E4',0.5],
+      ['D4',1.0],['C#4',0.5],['D4',1.5],['E4',0.5],['F4',0.5],
+      ['G4',1.5],['F4',0.5],['E4',0.5],['D4',0.5],['C#4',0.5],['D4',2.0],['R',0.5],
+      ['F4',1.0],['G4',0.5],['F4',1.5],['Eb4',0.5],['D4',0.5],
+      ['C4',1.0],['D4',0.5],['F4',1.5],['F4',0.5],['G4',0.5],
+      ['F4',1.5],['Eb4',0.5],['D4',0.5],['C4',0.5],['Bb3',0.5],
+      ['C4',1.0],['D4',0.5],['C4',1.5],['C4',0.5],['C4',2.5],
+    ])),
+    voice(V.bsn, seq(0, [
+      ['D3',1.5],['D3',1.5],['D3',1.0],
+      ['A2',1.5],['A2',1.5],['A2',1.0],
+      ['D3',1.5],['D3',1.5],['F3',1.0],
+      ['Bb2',1.5],['A2',1.5],['D3',2.0],['R',0.5],
+      ['Bb2',1.5],['Bb2',1.5],['Bb2',1.0],
+      ['F2',1.5],['F2',1.5],['F2',1.0],
+      ['Bb2',1.5],['Bb2',1.5],['Eb2',1.0],
+      ['F2',1.5],['F2',1.5],['F2',2.5],
+    ])),
+  ]
+});
+
+// --- 9. Domine Jesu ---
+mozart.movements.push({
+  title: "IX. Offertorium: Domine Jesu",
+  desc: "Lord Jesus Christ, King of glory \u2014 fugal textures with dramatic contrasts",
+  voices: [
+    voice(V.sop, [
+      ...seq(0, [['G5',1.0],['F#5',0.5],['G5',0.5],['A5',1.0],['Bb5',0.5],['A5',0.5]]),
+      ...seq(4, [['G5',1.0],['F#5',0.5],['E5',0.5],['D5',2.0]]),
+      ...seq(8, [['D5',0.5],['E5',0.5],['F#5',0.5],['G5',0.5],['A5',1.0],['Bb5',0.5],['A5',0.5],['G5',0.5],['F#5',0.5],['G5',1.0]]),
+      ...seq(14,[['A5',1.0],['G5',0.5],['F#5',0.5],['G5',0.5],['A5',0.5],['Bb5',0.5],['A5',0.5],['G5',2.0]]),
+    ]),
+    voice(V.alto, [
+      ...seq(2, [['D5',1.0],['C5',0.5],['D5',0.5],['E5',1.0],['F5',0.5],['E5',0.5]]),
+      ...seq(6, [['D5',1.0],['C5',0.5],['Bb4',0.5],['A4',2.0]]),
+      ...seq(10,[['Bb4',0.5],['C5',0.5],['D5',0.5],['E5',0.5],['F5',1.0],['E5',0.5],['D5',0.5],['C5',0.5],['Bb4',0.5],['D5',1.0]]),
+      ...seq(16,[['D5',0.5],['C5',0.5],['D5',0.5],['E5',0.5],['D5',2.0]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['G2',1.0],['D3',1.0],['G2',1.0],['D3',1.0]]),
+      ...seq(4, [['Bb2',1.0],['A2',1.0],['D3',2.0]]),
+      ...seq(8, [['G2',1.0],['C3',1.0],['F2',1.0],['Bb2',1.0],['Eb2',1.0],['D2',1.0]]),
+      ...seq(14,[['D3',1.0],['G2',1.0],['D3',1.0],['G2',2.0]]),
+    ]),
+  ]
+});
+
+// --- 10. Hostias ---
+mozart.movements.push({
+  title: "X. Hostias",
+  desc: "Sacrifices and prayers \u2014 serene, hymnlike texture in Eb major",
+  voices: [
+    voice(V.sop, seq(0, [
+      ['Eb5',1.5],['D5',0.5],['C5',0.5],['Bb4',0.5],['Eb5',1.5],['F5',0.5],['G5',2.0],
+      ['F5',1.0],['Eb5',0.5],['D5',0.5],['C5',1.5],['D5',0.5],['Eb5',2.0],['R',0.5],
+      ['Bb5',1.5],['Ab5',0.5],['G5',0.5],['F5',0.5],['Eb5',1.5],['F5',0.5],['G5',1.5],
+      ['Ab5',0.5],['G5',0.5],['F5',0.5],['Eb5',1.5],['D5',0.5],['Eb5',2.5],
+    ])),
+    voice(V.alto, seq(0, [
+      ['Bb4',1.5],['Bb4',0.5],['Ab4',0.5],['G4',0.5],['Bb4',1.5],['C5',0.5],['Eb5',2.0],
+      ['C5',1.0],['Bb4',0.5],['Bb4',0.5],['Ab4',1.5],['Bb4',0.5],['Bb4',2.0],['R',0.5],
+      ['Eb5',1.5],['Eb5',0.5],['Eb5',0.5],['D5',0.5],['C5',1.5],['D5',0.5],['Eb5',1.5],
+      ['Eb5',0.5],['Eb5',0.5],['D5',0.5],['C5',1.5],['Bb4',0.5],['Bb4',2.5],
+    ])),
+    voice(V.bsn, seq(0, [
+      ['Eb2',2.0],['Ab2',1.0],['Eb3',2.0],['C3',1.0],['Eb3',2.0],
+      ['Ab2',1.5],['Bb2',1.5],['Eb2',2.0],['R',0.5],
+      ['Eb3',2.0],['Bb2',1.0],['Ab2',2.0],['G2',1.0],['Eb3',1.5],
+      ['Ab2',1.5],['Bb2',1.0],['Eb2',2.5],
+    ])),
+  ]
+});
+
+// --- 11. Sanctus ---
+mozart.movements.push({
+  title: "XI. Sanctus",
+  desc: "Holy, holy, holy \u2014 majestic choral proclamation with rising 'Hosanna' fugue",
+  voices: [
+    voice(V.sop, [
+      ...seq(0, [['D5',2.0],['D5',1.0],['D5',2.0],['R',0.5]]),
+      ...seq(5.5,[['F5',2.0],['E5',1.0],['D5',2.0],['R',0.5]]),
+      // Hosanna fugue
+      ...seq(11,[['A5',0.4],['Bb5',0.4],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['E5',0.4],['F5',0.4],['G5',0.4],['A5',0.8]]),
+      ...seq(16,[['Bb5',0.4],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.4],['F5',0.4],['G5',0.4],['A5',0.4],['D5',1.6]]),
+    ]),
+    voice(V.alto, [
+      ...seq(0, [['A4',2.0],['A4',1.0],['A4',2.0],['R',0.5]]),
+      ...seq(5.5,[['D5',2.0],['C#5',1.0],['A4',2.0],['R',0.5]]),
+      ...seq(13,[['F5',0.4],['G5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['C#5',0.4],['A4',0.4],['Bb4',0.4],['C5',0.4],['D5',0.4],['E5',0.8]]),
+      ...seq(18,[['D5',0.4],['C5',0.4],['Bb4',0.4],['A4',0.8],['A4',1.6]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',2.0],['D3',1.0],['D3',2.0],['R',0.5]]),
+      ...seq(5.5,[['D3',2.0],['A2',1.0],['D3',2.0],['R',0.5]]),
+      ...seq(11,[['D3',0.8],['A2',0.8],['Bb2',0.8],['C3',0.8],['D3',0.8],['A2',0.8]]),
+      ...seq(16,[['Bb2',0.8],['C3',0.8],['D3',0.8],['A2',0.8],['D3',1.6]]),
+    ]),
+    voice(V.timp, [
+      n('D2',0,0.3),n('D2',2.0,0.3),n('D2',5.5,0.3),n('D2',7.5,0.3),
+      n('D2',11,0.15),n('D2',11.8,0.15),n('D2',12.6,0.15),
+      n('D2',16,0.15),n('D2',16.8,0.15),n('D2',17.6,0.15),
+    ]),
+  ]
+});
+
+// --- 12. Benedictus ---
+mozart.movements.push({
+  title: "XII. Benedictus",
+  desc: "Blessed is He \u2014 a gentle, flowing quartet in Bb major",
+  voices: [
+    voice(V.sop, seq(0, [
+      ['Bb4',1.0],['C5',0.5],['D5',0.5],['Eb5',1.5],['D5',0.5],['C5',0.5],['Bb4',0.5],
+      ['A4',1.0],['Bb4',0.5],['C5',0.5],['D5',1.5],['Eb5',0.5],['F5',2.0],['R',0.5],
+      ['F5',1.0],['Eb5',0.5],['D5',0.5],['C5',1.5],['D5',0.5],['Eb5',0.5],['D5',0.5],
+      ['C5',1.0],['Bb4',0.5],['A4',0.5],['Bb4',2.5],['R',0.5],
+      ['D5',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['Bb4',1.5],['C5',0.5],
+      ['D5',1.5],['Eb5',0.5],['D5',0.5],['C5',0.5],['Bb4',2.5],
+    ])),
+    voice(V.alto, seq(0, [
+      ['F4',1.0],['A4',0.5],['Bb4',0.5],['C5',1.5],['Bb4',0.5],['A4',0.5],['G4',0.5],
+      ['F4',1.0],['G4',0.5],['A4',0.5],['Bb4',1.5],['C5',0.5],['D5',2.0],['R',0.5],
+      ['D5',1.0],['C5',0.5],['Bb4',0.5],['A4',1.5],['Bb4',0.5],['C5',0.5],['Bb4',0.5],
+      ['A4',1.0],['G4',0.5],['F4',0.5],['F4',2.5],['R',0.5],
+      ['Bb4',1.5],['A4',0.5],['G4',0.5],['F4',0.5],['F4',1.5],['A4',0.5],
+      ['Bb4',1.5],['C5',0.5],['Bb4',0.5],['A4',0.5],['F4',2.5],
+    ])),
+    voice(V.bsn, seq(0, [
+      ['Bb2',2.0],['Eb2',2.0],['F2',2.0],
+      ['Bb2',2.0],['Bb2',2.0],['Bb2',2.0],['R',0.5],
+      ['Bb2',2.0],['F2',2.0],['Bb2',1.0],
+      ['F2',2.0],['Bb2',2.5],['R',0.5],
+      ['Bb2',2.0],['Eb2',2.0],
+      ['Bb2',2.0],['F2',1.0],['Bb2',2.5],
+    ])),
+  ]
+});
+
+// --- 13. Agnus Dei ---
+mozart.movements.push({
+  title: "XIII. Agnus Dei",
+  desc: "Lamb of God \u2014 a deeply sorrowful plea, returning to the dark D minor world",
+  voices: [
+    voice(V.sop, seq(0, [
+      ['D5',2.0],['C#5',0.5],['D5',0.5],['E5',1.0],['F5',2.0],
+      ['E5',0.5],['D5',0.5],['C#5',0.5],['D5',0.5],['E5',0.5],['F5',0.5],['E5',2.0],['R',0.5],
+      ['A5',2.0],['G5',0.5],['F5',0.5],['E5',1.0],['D5',2.0],
+      ['C#5',0.5],['D5',0.5],['E5',0.5],['F5',0.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',2.5],['R',0.5],
+      ['F5',1.5],['E5',0.5],['D5',0.5],['C#5',0.5],['D5',1.5],['E5',0.5],['F5',0.5],['E5',0.5],['D5',3.0],
+    ])),
+    voice(V.alto, seq(0, [
+      ['A4',2.0],['A4',0.5],['A4',0.5],['Bb4',1.0],['A4',2.0],
+      ['G4',0.5],['F4',0.5],['E4',0.5],['F4',0.5],['G4',0.5],['A4',0.5],['A4',2.0],['R',0.5],
+      ['F5',2.0],['E5',0.5],['D5',0.5],['C#5',1.0],['A4',2.0],
+      ['A4',0.5],['A4',0.5],['Bb4',0.5],['A4',0.5],['G4',0.5],['F4',0.5],['E4',0.5],['F4',2.5],['R',0.5],
+      ['A4',1.5],['G4',0.5],['F4',0.5],['E4',0.5],['F4',1.5],['G4',0.5],['A4',0.5],['A4',0.5],['A4',3.0],
+    ])),
+    voice(V.bsn, seq(0, [
+      ['D3',2.0],['A2',1.0],['D3',1.0],['D3',2.0],
+      ['A2',1.0],['D3',1.0],['A2',1.0],['A2',2.0],['R',0.5],
+      ['D3',2.0],['A2',1.0],['A2',1.0],['D3',2.0],
+      ['A2',1.0],['D3',1.0],['A2',1.0],['D3',2.5],['R',0.5],
+      ['D3',2.0],['A2',1.0],['D3',2.0],['A2',1.0],['D3',3.0],
+    ])),
+  ]
+});
+
+// --- 14. Communio: Lux Aeterna ---
+mozart.movements.push({
+  title: "XIV. Communio: Lux aeterna",
+  desc: "Eternal light \u2014 the final movement returns to the Introitus material, bringing the work full circle",
+  voices: [
+    voice(V.sop, [
+      ...seq(0, [['D5',2.0],['C#5',0.8],['D5',1.5],['E5',1.0],['F5',2.0],['E5',0.8],['D5',1.5]]),
+      ...seq(12,[['D5',1.5],['D5',0.8],['E5',0.8],['F5',1.5],['E5',0.8],['D5',1.5],['C#5',0.8],['D5',2.0]]),
+      // Cum sanctis - fugal
+      ...seq(22,[['D5',0.4],['E5',0.4],['F5',0.4],['G5',0.4],['A5',0.8],['Bb5',0.4],['A5',0.4],['G5',0.4],['F5',0.4],['E5',0.8]]),
+      ...seq(27,[['F5',0.4],['G5',0.4],['A5',0.4],['Bb5',0.4],['A5',0.8],['G5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['C#5',0.8]]),
+      ...seq(32,[['D5',0.8],['E5',0.4],['F5',0.4],['E5',0.4],['D5',0.4],['C#5',0.4],['D5',2.5]]),
+    ]),
+    voice(V.alto, [
+      ...seq(0, [['A4',2.0],['A4',0.8],['A4',1.5],['Bb4',1.0],['A4',2.0],['G4',0.8],['F4',1.5]]),
+      ...seq(12,[['A4',1.5],['A4',0.8],['Bb4',0.8],['A4',1.5],['G4',0.8],['F4',1.5],['E4',0.8],['F4',2.0]]),
+      ...seq(24,[['A4',0.4],['Bb4',0.4],['C5',0.4],['D5',0.4],['E5',0.8],['F5',0.4],['E5',0.4],['D5',0.4],['C5',0.4],['Bb4',0.8]]),
+      ...seq(29,[['C5',0.4],['D5',0.4],['E5',0.4],['F5',0.4],['E5',0.8],['D5',0.4],['C5',0.4],['Bb4',0.4],['A4',0.4],['A4',0.8]]),
+      ...seq(34,[['A4',0.8],['Bb4',0.4],['A4',0.4],['G4',0.4],['F4',0.4],['E4',0.4],['F4',2.5]]),
+    ]),
+    voice(V.bsn, [
+      ...seq(0, [['D3',2.0],['A2',0.8],['D3',1.5],['C3',1.0],['D3',2.0],['A2',0.8],['Bb2',1.5]]),
+      ...seq(12,[['D3',1.5],['D3',0.8],['C3',0.8],['D3',1.5],['A2',0.8],['Bb2',1.5],['A2',0.8],['D3',2.0]]),
+      ...seq(22,[['D3',0.8],['C3',0.8],['Bb2',0.8],['A2',0.8],['G2',0.8],['F2',0.8]]),
+      ...seq(27,[['Bb2',0.8],['A2',0.8],['G2',0.8],['D3',0.8],['A2',0.8]]),
+      ...seq(32,[['D3',0.8],['A2',0.8],['Bb2',0.4],['A2',0.4],['D3',2.5]]),
+    ]),
+    voice(V.strPulse, pulse([
+      {ch:['D4','F4','A4'],t:0,dur:10},{ch:['A3','C#4','E4'],t:10,dur:2},
+      {ch:['D4','F4','A4'],t:12,dur:4},{ch:['Bb3','D4','F4'],t:16,dur:2},
+      {ch:['A3','C#4','E4'],t:18,dur:4},
+      {ch:['D4','F4','A4'],t:22,dur:5},
+      {ch:['Bb3','D4','F4'],t:27,dur:2.5},{ch:['A3','C#4','E4'],t:29.5,dur:2.5},
+      {ch:['D4','F4','A4'],t:32,dur:4},
+    ], 0.35, 0.15)),
+  ]
+});
+
+
+// ════════════════════════════════════════════════════════════════════
+//  UI
+// ════════════════════════════════════════════════════════════════════
+
+const allWorks = [purcell, mozart];
+const synth = new Synthesizer();
+let currentId = null;
+let animFrameId = null;
+let playQueue = [];
+let queueIdx = -1;
+let autoplay = false;
+let breathMs = 1500; // pause between pieces
+
+function getGlobalTempo() {
+  return parseFloat(document.getElementById('globalTempo').value);
+}
+
+document.getElementById('globalTempo').addEventListener('input', function() {
+  document.getElementById('globalTempoVal').textContent = parseFloat(this.value).toFixed(2) + 'x';
+});
+
+// Autoplay + breath controls (built via DOM)
+(function buildAutoplayUI() {
+  var bar = document.getElementById('globalBar');
+
+  var sep = document.createTextNode(' ');
+  bar.appendChild(sep);
+
+  var breathLbl = document.createElement('label');
+  breathLbl.className = 'breath-label';
+  breathLbl.textContent = 'Breath';
+  bar.appendChild(breathLbl);
+
+  var breathSlider = document.createElement('input');
+  breathSlider.type = 'range';
+  breathSlider.min = '0.3';
+  breathSlider.max = '5';
+  breathSlider.step = '0.1';
+  breathSlider.value = '1.5';
+  bar.appendChild(breathSlider);
+
+  var breathVal = document.createElement('span');
+  breathVal.textContent = '1.5s';
+  bar.appendChild(breathVal);
+
+  breathSlider.addEventListener('input', function() {
+    breathMs = parseFloat(breathSlider.value) * 1000;
+    breathVal.textContent = parseFloat(breathSlider.value).toFixed(1) + 's';
+  });
+
+  var autoBtn = document.createElement('button');
+  autoBtn.className = 'autoplay-btn';
+  autoBtn.textContent = '\u221E Autoplay All';
+  bar.appendChild(autoBtn);
+
+  autoBtn.addEventListener('click', function() {
+    if (autoplay) {
+      // Turn off autoplay (don't stop current piece, just stop continuing)
+      autoplay = false;
+      autoBtn.classList.remove('active-toggle');
+      autoBtn.textContent = '\u221E Autoplay All';
+      playQueue = [];
+      queueIdx = -1;
+    } else {
+      // Turn on and start from the beginning
+      autoplay = true;
+      autoBtn.classList.add('active-toggle');
+      autoBtn.textContent = '\u221E Autoplay On';
+      playAllEverything();
+    }
+  });
+})();
+
+function buildCard(piece, id) {
+  const card = document.createElement('div');
+  card.className = 'piece-card';
+  card.id = 'card-' + id;
+
+  const header = document.createElement('div');
+  header.className = 'piece-header';
+
+  const info = document.createElement('div');
+  info.className = 'piece-info';
+  const h3 = document.createElement('h3');
+  h3.textContent = piece.title;
+  info.appendChild(h3);
+  if (piece.desc) {
+    const desc = document.createElement('div');
+    desc.className = 'desc';
+    desc.textContent = piece.desc;
+    info.appendChild(desc);
+  }
+
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+  const playBtn = document.createElement('button');
+  playBtn.id = 'play-' + id;
+  playBtn.textContent = '\u25B6 Play';
+  playBtn.addEventListener('click', function() { playSingle(id); });
+  const stopBtn = document.createElement('button');
+  stopBtn.className = 'stop-btn';
+  stopBtn.id = 'stop-' + id;
+  stopBtn.textContent = '\u25A0 Stop';
+  stopBtn.disabled = true;
+  stopBtn.addEventListener('click', function() { stopCurrent(); });
+  controls.appendChild(playBtn);
+  controls.appendChild(stopBtn);
+
+  header.appendChild(info);
+  header.appendChild(controls);
+  card.appendChild(header);
+
+  const vizC = document.createElement('div');
+  vizC.className = 'visualizer-container';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'visualizer';
+  canvas.id = 'canvas-' + id;
+  vizC.appendChild(canvas);
+  card.appendChild(vizC);
+
+  const pBar = document.createElement('div');
+  pBar.className = 'progress-bar';
+  const pFill = document.createElement('div');
+  pFill.className = 'progress-fill';
+  pFill.id = 'progress-' + id;
+  pBar.appendChild(pFill);
+  card.appendChild(pBar);
+
+  return card;
+}
+
+// Flat list for lookup
+const allPieces = [];
+
+function render() {
+  const container = document.getElementById('works');
+  let globalIdx = 0;
+
+  for (const work of allWorks) {
+    const group = document.createElement('div');
+    group.className = 'work-group';
+
+    const title = document.createElement('div');
+    title.className = 'work-title';
+    title.textContent = work.title;
+    const sub = document.createElement('small');
+    sub.textContent = work.subtitle;
+    title.appendChild(sub);
+    group.appendChild(title);
+
+    // Play All button
+    const startIdx = globalIdx;
+    const playAllBtn = document.createElement('button');
+    playAllBtn.className = 'play-all-btn';
+    playAllBtn.textContent = '\u25B6 Play Entire Work';
+    const endIdx = startIdx + work.movements.length;
+    playAllBtn.addEventListener('click', function() { playAll(startIdx, endIdx); });
+    group.appendChild(playAllBtn);
+
+    const mvts = document.createElement('div');
+    mvts.className = 'movements';
+
+    for (const mvt of work.movements) {
+      allPieces.push(mvt);
+      mvts.appendChild(buildCard(mvt, globalIdx));
+      globalIdx++;
+    }
+
+    group.appendChild(mvts);
+    container.appendChild(group);
+  }
+}
+
+function playSingle(id) {
+  stopCurrent();
+  playQueue = [];
+  queueIdx = -1;
+  startPiece(id);
+}
+
+function playAll(startIdx, endIdx) {
+  stopCurrent();
+  playQueue = [];
+  for (let i = startIdx; i < endIdx; i++) playQueue.push(i);
+  queueIdx = 0;
+  startPiece(playQueue[0]);
+}
+
+function playAllEverything() {
+  stopCurrent();
+  playQueue = [];
+  for (let i = 0; i < allPieces.length; i++) playQueue.push(i);
+  queueIdx = 0;
+  startPiece(playQueue[0]);
+}
+
+function startPiece(id) {
+  synth.init();
+  currentId = id;
+  const card = document.getElementById('card-' + id);
+  const playBtn = document.getElementById('play-' + id);
+  const stopBtn = document.getElementById('stop-' + id);
+  const progress = document.getElementById('progress-' + id);
+
+  card.classList.add('playing');
+  playBtn.disabled = true;
+  stopBtn.disabled = false;
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const canvas = document.getElementById('canvas-' + id);
+  startVisualizer(canvas);
+
+  synth.playPiece(allPieces[id], getGlobalTempo(),
+    function(pct) { progress.style.width = (pct * 100) + '%'; },
+    function() {
+      cleanupPiece(id);
+      // Play next in queue, or autoplay next
+      if (playQueue.length > 0 && queueIdx >= 0) {
+        queueIdx++;
+        if (queueIdx < playQueue.length) {
+          setTimeout(function() { startPiece(playQueue[queueIdx]); }, breathMs);
+        } else {
+          playQueue = [];
+          queueIdx = -1;
+          // If autoplay, wrap around to first piece
+          if (autoplay) {
+            setTimeout(function() { playAllEverything(); }, breathMs);
+          }
+        }
+      } else if (autoplay) {
+        // Single piece finished, advance to next
+        var next = id + 1;
+        if (next >= allPieces.length) next = 0;
+        setTimeout(function() { startPiece(next); }, breathMs);
+      }
+    }
+  );
+}
+
+function cleanupPiece(id) {
+  const card = document.getElementById('card-' + id);
+  const playBtn = document.getElementById('play-' + id);
+  const stopBtn = document.getElementById('stop-' + id);
+  const progress = document.getElementById('progress-' + id);
+  if (card) card.classList.remove('playing');
+  if (playBtn) playBtn.disabled = false;
+  if (stopBtn) stopBtn.disabled = true;
+  if (progress) progress.style.width = '0%';
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+}
+
+function stopCurrent() {
+  synth.stop();
+  playQueue = [];
+  queueIdx = -1;
+  if (currentId !== null) {
+    cleanupPiece(currentId);
+    currentId = null;
+  }
+  // Reset autoplay UI if active
+  if (autoplay) {
+    autoplay = false;
+    var ab = document.querySelector('.autoplay-btn');
+    if (ab) { ab.classList.remove('active-toggle'); ab.textContent = '\u221E Autoplay All'; }
+  }
+}
+
+function startVisualizer(canvas) {
+  const ctx2d = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  ctx2d.scale(dpr, dpr);
+
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  const bufLen = synth.analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufLen);
+
+  function draw() {
+    if (!synth.playing) { ctx2d.clearRect(0, 0, w, h); return; }
+    animFrameId = requestAnimationFrame(draw);
+    synth.analyser.getByteTimeDomainData(dataArray);
+
+    ctx2d.fillStyle = '#0d0b10';
+    ctx2d.fillRect(0, 0, w, h);
+
+    ctx2d.lineWidth = 1.5;
+    ctx2d.strokeStyle = '#d4a853';
+    ctx2d.beginPath();
+    const sliceW = w / bufLen;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const y = (dataArray[i] / 128.0) * h / 2;
+      if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+      x += sliceW;
+    }
+    ctx2d.lineTo(w, h / 2);
+    ctx2d.stroke();
+
+    const freqData = new Uint8Array(bufLen);
+    synth.analyser.getByteFrequencyData(freqData);
+    const barCount = 48;
+    const barW = w / barCount;
+    const step = Math.floor(bufLen / barCount);
+    for (let i = 0; i < barCount; i++) {
+      const val = freqData[i * step] / 255;
+      ctx2d.fillStyle = 'rgba(212, 168, 83, ' + (0.12 + val * 0.2) + ')';
+      ctx2d.fillRect(i * barW, h - val * h * 0.6, barW - 1, val * h * 0.6);
+    }
+  }
+  draw();
+}
+
+render();
+
+// ─── Drone UI ──────────────────────────────────────────────────────
+
+const drone = new DroneEngine(synth);
+
+(function buildDroneUI() {
+  const grid = document.getElementById('droneGrid');
+  const btns = document.getElementById('droneButtons');
+  const percP = document.getElementById('percPatterns');
+
+  function row(labelText, inputEl, valEl) {
+    const r = document.createElement('div');
+    r.className = 'drone-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = labelText;
+    r.appendChild(lbl);
+    r.appendChild(inputEl);
+    if (valEl) r.appendChild(valEl);
+    return r;
+  }
+
+  function slider(min, max, step, val, onChange) {
+    const inp = document.createElement('input');
+    inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = val;
+    const sp = document.createElement('span');
+    sp.textContent = Number(val).toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0);
+    inp.addEventListener('input', function() {
+      sp.textContent = Number(inp.value).toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0);
+      onChange(parseFloat(inp.value));
+    });
+    return { inp, sp };
+  }
+
+  // Root note select
+  const rootSel = document.createElement('select');
+  ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'].forEach(function(nm) {
+    const opt = document.createElement('option');
+    opt.value = nm; opt.textContent = nm;
+    if (nm === 'D') opt.selected = true;
+    rootSel.appendChild(opt);
+  });
+  rootSel.addEventListener('change', function() { drone.rootNote = rootSel.value; drone.restart(); });
+  grid.appendChild(row('Root', rootSel));
+
+  // Octave
+  var s = slider(1, 4, 1, 2, function(v) { drone.octave = v; drone.restart(); });
+  grid.appendChild(row('Octave', s.inp, s.sp));
+
+  // Drone volume
+  s = slider(0, 1, 0.05, 0.3, function(v) { drone.droneVolume = v; drone.restart(); });
+  grid.appendChild(row('Drone Vol', s.inp, s.sp));
+
+  // Shimmer
+  s = slider(0, 1, 0.05, 0.3, function(v) { drone.shimmer = v; drone.restart(); });
+  grid.appendChild(row('Shimmer', s.inp, s.sp));
+
+  // Warmth
+  s = slider(0, 1, 0.05, 0.5, function(v) { drone.warmth = v; drone.restart(); });
+  grid.appendChild(row('Warmth', s.inp, s.sp));
+
+  // Drift
+  s = slider(0, 1, 0.05, 0.3, function(v) { drone.drift = v; drone.restart(); });
+  grid.appendChild(row('Drift', s.inp, s.sp));
+
+  // Perc volume
+  s = slider(0, 1, 0.05, 0.4, function(v) { drone.percVolume = v; });
+  grid.appendChild(row('Perc Vol', s.inp, s.sp));
+
+  // Perc density
+  s = slider(0, 1, 0.05, 0.5, function(v) { drone.percDensity = v; });
+  grid.appendChild(row('Density', s.inp, s.sp));
+
+  // Perc pattern buttons
+  var patterns = [
+    { id: 'ritual', label: 'Ritual' },
+    { id: 'bells',  label: 'Singing Bowls' },
+    { id: 'rain',   label: 'Rain' },
+    { id: 'tribal', label: 'Tribal' },
+    { id: 'glass',  label: 'Glass' },
+    { id: 'none',   label: 'Drone Only' },
+  ];
+  patterns.forEach(function(pat) {
+    var b = document.createElement('button');
+    b.textContent = pat.label;
+    b.dataset.pat = pat.id;
+    if (pat.id === 'ritual') b.classList.add('active-toggle');
+    b.addEventListener('click', function() {
+      percP.querySelectorAll('button').forEach(function(x) { x.classList.remove('active-toggle'); });
+      b.classList.add('active-toggle');
+      drone.percPattern = pat.id;
+      drone.percOn = pat.id !== 'none';
+      if (drone.running) {
+        if (drone.percId) { clearTimeout(drone.percId); drone.percId = null; }
+        if (drone.percOn) drone._startPerc();
+      }
+    });
+    percP.appendChild(b);
+  });
+
+  // Start / Stop buttons
+  var startBtn = document.createElement('button');
+  startBtn.textContent = '\u2662 Start Drone';
+  startBtn.addEventListener('click', function() { drone.start(); });
+
+  var stopBtn = document.createElement('button');
+  stopBtn.className = 'stop-drone';
+  stopBtn.textContent = '\u25A0 Stop Drone';
+  stopBtn.addEventListener('click', function() { drone.stop(); });
+
+  btns.appendChild(startBtn);
+  btns.appendChild(stopBtn);
+})();
+</script>
+</body>
+</html>
