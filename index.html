@@ -51,12 +51,82 @@
     position: relative;
   }
 
-  /* ── Sections ──────────────────────────── */
+  /* ── Hub (category cards side by side) ── */
+
+  .hub {
+    max-width: 960px;
+    margin: 0 auto 2rem;
+    padding: 0 1.5rem;
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+  }
+
+  .category-card {
+    flex: 1;
+    max-width: 440px;
+    background: linear-gradient(145deg, #0e0d12 0%, #141218 100%);
+    border: 1px solid #1e1a24;
+    border-radius: 12px;
+    padding: 2rem 2rem 1.75rem;
+    cursor: pointer;
+    transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    text-align: center;
+  }
+
+  .category-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .category-card.cartoons:hover { border-color: #c4a348; box-shadow: 0 8px 30px rgba(196, 163, 72, 0.1); }
+  .category-card.music:hover { border-color: #7a53d4; box-shadow: 0 8px 30px rgba(122, 83, 212, 0.1); }
+
+  .category-card.active {
+    transform: translateY(-3px);
+  }
+  .category-card.active.cartoons { border-color: #c4a348; box-shadow: 0 8px 30px rgba(196, 163, 72, 0.15); }
+  .category-card.active.music { border-color: #7a53d4; box-shadow: 0 8px 30px rgba(122, 83, 212, 0.15); }
+
+  .category-card h2 {
+    font-size: 1.5rem;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .category-card.cartoons h2 { color: #c4a348; }
+  .category-card.music h2 { color: #b080e0; }
+
+  .category-card .count {
+    font-size: 0.85rem;
+    color: #554a38;
+  }
+
+  .category-card .cat-arrow {
+    display: block;
+    margin-top: 1rem;
+    font-size: 1.2rem;
+    transition: transform 0.2s;
+  }
+
+  .category-card.cartoons .cat-arrow { color: #c4a348; }
+  .category-card.music .cat-arrow { color: #b080e0; }
+
+  .category-card:hover .cat-arrow { transform: translateY(2px); }
+
+  /* ── Sections (drill-down) ────────────── */
 
   .section {
     max-width: 960px;
     margin: 0 auto 3rem;
     padding: 0 1.5rem;
+    display: none;
+  }
+
+  .section.visible {
+    display: block;
   }
 
   .section-header {
@@ -67,6 +137,16 @@
     border-bottom: 1px solid #1a1815;
     padding-bottom: 0.75rem;
   }
+
+  .section-back {
+    font-size: 0.85rem;
+    color: #554a38;
+    cursor: pointer;
+    transition: color 0.2s;
+    margin-right: 0.25rem;
+  }
+
+  .section-back:hover { color: #d0c8b8; }
 
   .section-header h2 {
     font-size: 1.5rem;
@@ -227,16 +307,31 @@
   <div class="tagline">Cartoons and music, synthesized live in your browser</div>
 </header>
 
-<div class="section cartoons">
+<div class="hub" id="hub">
+  <div class="category-card cartoons" id="catCartoons">
+    <h2>Cartoons</h2>
+    <span class="count" id="cartoonCountHub"></span>
+    <span class="cat-arrow">&#8595;</span>
+  </div>
+  <div class="category-card music" id="catMusic">
+    <h2>Music</h2>
+    <span class="count" id="musicCountHub"></span>
+    <span class="cat-arrow">&#8595;</span>
+  </div>
+</div>
+
+<div class="section cartoons" id="sectionCartoons">
   <div class="section-header">
+    <span class="section-back" id="backCartoons">&larr; Back</span>
     <h2>Cartoons</h2>
     <span class="count" id="cartoonCount"></span>
   </div>
   <div class="card-grid" id="cartoonGrid"></div>
 </div>
 
-<div class="section music">
+<div class="section music" id="sectionMusic">
   <div class="section-header">
+    <span class="section-back" id="backMusic">&larr; Back</span>
     <h2>Music</h2>
     <span class="count" id="musicCount"></span>
   </div>
@@ -528,13 +623,34 @@ function buildCard(item, type) {
 var cartoonGrid = document.getElementById('cartoonGrid');
 var liveCartoons = cartoons.filter(function(c) { return !c.comingSoon; });
 cartoons.forEach(function(c) { cartoonGrid.appendChild(buildCard(c, 'cartoon')); });
-document.getElementById('cartoonCount').textContent =
-  liveCartoons.length + (liveCartoons.length === 1 ? ' episode' : ' episodes');
+var cartoonCountText = liveCartoons.length + (liveCartoons.length === 1 ? ' episode' : ' episodes');
+document.getElementById('cartoonCount').textContent = cartoonCountText;
+document.getElementById('cartoonCountHub').textContent = cartoonCountText;
 
 var musicGrid = document.getElementById('musicGrid');
 musicItems.forEach(function(m) { musicGrid.appendChild(buildCard(m, 'music')); });
-document.getElementById('musicCount').textContent =
-  musicItems.length + (musicItems.length === 1 ? ' collection' : ' collections');
+var musicCountText = musicItems.length + (musicItems.length === 1 ? ' collection' : ' collections');
+document.getElementById('musicCount').textContent = musicCountText;
+document.getElementById('musicCountHub').textContent = musicCountText;
+
+// ─── Hub Navigation ───────────────────────────────────────────────
+
+function showSection(section) {
+  document.getElementById('hub').style.display = 'none';
+  document.getElementById('section' + section).classList.add('visible');
+}
+
+function showHub() {
+  document.getElementById('sectionCartoons').classList.remove('visible');
+  document.getElementById('sectionMusic').classList.remove('visible');
+  document.getElementById('hub').style.display = '';
+  document.querySelectorAll('.category-card').forEach(function(c) { c.classList.remove('active'); });
+}
+
+document.getElementById('catCartoons').addEventListener('click', function() { showSection('Cartoons'); });
+document.getElementById('catMusic').addEventListener('click', function() { showSection('Music'); });
+document.getElementById('backCartoons').addEventListener('click', showHub);
+document.getElementById('backMusic').addEventListener('click', showHub);
 </script>
 </body>
 </html>

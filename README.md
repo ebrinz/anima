@@ -2,9 +2,11 @@
   <img src="banner.svg" alt="Anima" width="100%"/>
 </p>
 
-Cartoons and music, synthesized live in the browser. No audio files, no video files — everything is rendered in real-time using Canvas and the Web Audio API.
+A sketchbook for HTML media vibe codes. Cartoons, music, visual toys — everything rendered live in the browser with Canvas and the Web Audio API. No audio files, no video files, just code.
 
-**[Explore it](https://ebrinz.github.io/anima)**
+**[Check it out](https://ebrinz.github.io/anima)**
+
+---
 
 ## Cartoons
 
@@ -32,7 +34,7 @@ Full suites of classical works, synthesized from note data via the Web Audio API
 
 Includes a layerable drone engine with 5 generative percussion patterns, autoplay, and tempo controls.
 
-## Audio
+## Audio Notes
 
 - Best experienced in Chrome (Safari 26/Tahoe has Web Audio disabled behind a feature flag)
 - All synthesis uses oscillators, ADSR envelopes, and filters — no samples
